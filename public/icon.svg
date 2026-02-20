@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#3b82f6"/>
+  <g transform="translate(100, 70)" fill="none" stroke="white" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="20" y="0" width="220" height="310" rx="20" fill="rgba(255,255,255,0.15)"/>
+    <line x1="70" y1="70" x2="200" y2="70"/>
+    <line x1="70" y1="120" x2="200" y2="120"/>
+    <line x1="70" y1="170" x2="160" y2="170"/>
+    <text x="130" y="265" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="52" fill="white" stroke="none">INV</text>
+  </g>
+  <circle cx="380" cy="380" r="100" fill="#10b981"/>
+  <g transform="translate(380, 380)" stroke="white" stroke-width="20" stroke-linecap="round" fill="none">
+    <text x="0" y="15" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="72" fill="white" stroke="none">&#8377;</text>
+  </g>
+</svg>
