@@ -4,7 +4,7 @@ import { router, protectedProcedure } from "../trpc";
 export const dashboardRouter = router({
   /** Get dashboard summary for a company */
   summary: protectedProcedure
-    .input(z.object({ companyId: z.string().uuid() }))
+    .input(z.object({ companyId: z.string() }))
     .query(async ({ ctx, input }) => {
       const { companyId } = input;
 
@@ -78,7 +78,7 @@ export const dashboardRouter = router({
             status: true,
             customer: { select: { name: true } },
           },
-          orderBy: { createdAt: "desc" },
+          orderBy: { invoiceDate: "desc" },
           take: 10,
         }),
 
@@ -104,7 +104,7 @@ export const dashboardRouter = router({
 
   /** Reminders dashboard — overdue invoices, pending TDS certs, follow-ups */
   reminders: protectedProcedure
-    .input(z.object({ companyId: z.string().uuid() }))
+    .input(z.object({ companyId: z.string() }))
     .query(async ({ ctx, input }) => {
       const { companyId } = input;
       const now = new Date();

@@ -19,7 +19,7 @@ function computeVendorBillStatus(bill: { status: string; balanceDue: number | { 
 }
 
 const lineItemSchema = z.object({
-  itemId: z.string().uuid().optional().nullable(),
+  itemId: z.string().optional().nullable(),
   description: z.string().min(1),
   hsnSacCode: z.string().optional().nullable(),
   quantity: z.number().min(0),
@@ -33,11 +33,15 @@ export const vendorBillRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
+        companyId: z.string(),
         status: z.string().optional(),
-        vendorId: z.string().uuid().optional(),
+        vendorId: z.string().optional(),
         search: z.string().optional(),
         showDeleted: z.boolean().optional(),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(10).max(100).default(50),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -57,14 +61,26 @@ export const vendorBillRouter = router({
           { vendor: { name: { contains: input.search, mode: "insensitive" } } },
         ];
       }
-      const bills = await ctx.db.vendorBill.findMany({
-        where: where as never,
-        include: {
-          vendor: { select: { id: true, name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 100,
-      });
+      if (input.dateFrom || input.dateTo) {
+        const dateFilter: Record<string, Date> = {};
+        if (input.dateFrom) dateFilter.gte = new Date(input.dateFrom);
+        if (input.dateTo) dateFilter.lte = new Date(input.dateTo + "T23:59:59");
+        where.billDate = dateFilter;
+      }
+      const skip = (input.page - 1) * input.pageSize;
+
+      const [bills, totalCount] = await Promise.all([
+        ctx.db.vendorBill.findMany({
+          where: where as never,
+          include: {
+            vendor: { select: { id: true, name: true } },
+          },
+          orderBy: { billDate: "desc" },
+          skip,
+          take: input.pageSize,
+        }),
+        ctx.db.vendorBill.count({ where: where as never }),
+      ]);
 
       // Auto-compute status for non-deleted bills
       if (!input.showDeleted) {
@@ -81,14 +97,21 @@ export const vendorBillRouter = router({
             );
           }
         }
-        if (updates.length > 0) await Promise.all(updates);
+        if (updates.length > 0) {
+          try { await Promise.all(updates); } catch (e) { console.error("Status sync error:", e); }
+        }
       }
 
-      return bills;
+      return {
+        bills,
+        totalCount,
+        totalPages: Math.ceil(totalCount / input.pageSize),
+        page: input.page,
+      };
     }),
 
   get: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.vendorBill.findUniqueOrThrow({
         where: { id: input.id, deletedAt: null },
@@ -106,8 +129,8 @@ export const vendorBillRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
-        vendorId: z.string().uuid(),
+        companyId: z.string(),
+        vendorId: z.string(),
         billNumber: z.string().min(1),
         billDate: z.string(),
         dueDate: z.string(),
@@ -203,7 +226,7 @@ export const vendorBillRouter = router({
   updateCompliance: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string(),
         tdsApplicable: z.boolean().optional(),
         tdsRate: z.number().min(0).max(100).optional().nullable(),
         tdsAmount: z.number().min(0).optional(),
@@ -232,8 +255,8 @@ export const vendorBillRouter = router({
   recordPayment: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
-        vendorBillId: z.string().uuid(),
+        companyId: z.string(),
+        vendorBillId: z.string(),
         paymentDate: z.string(),
         amount: z.number().positive(),
         paymentMode: z.string(),
@@ -280,7 +303,7 @@ export const vendorBillRouter = router({
     }),
 
   updateStatus: protectedProcedure
-    .input(z.object({ id: z.string().uuid(), status: z.string() }))
+    .input(z.object({ id: z.string(), status: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.vendorBill.update({
         where: { id: input.id },
@@ -289,7 +312,7 @@ export const vendorBillRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.vendorBill.update({
         where: { id: input.id },
@@ -298,7 +321,7 @@ export const vendorBillRouter = router({
     }),
 
   restore: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const bill = await ctx.db.vendorBill.update({
         where: { id: input.id },

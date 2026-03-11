@@ -6,8 +6,8 @@ export const ledgerRouter = router({
   customerLedger: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
-        customerId: z.string().uuid(),
+        companyId: z.string(),
+        customerId: z.string(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -120,8 +120,8 @@ export const ledgerRouter = router({
   vendorLedger: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
-        vendorId: z.string().uuid(),
+        companyId: z.string(),
+        vendorId: z.string(),
       })
     )
     .query(async ({ ctx, input }) => {

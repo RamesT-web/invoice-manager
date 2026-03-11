@@ -13,6 +13,8 @@ import { reportRouter } from "./routers/report";
 import { ledgerRouter } from "./routers/ledger";
 import { attachmentRouter } from "./routers/attachment";
 import { settingRouter } from "./routers/setting";
+import { googleSheetsRouter } from "./routers/googleSheets";
+import { rentalRouter } from "./routers/rental";
 
 export const appRouter = router({
   user: userRouter,
@@ -29,6 +31,8 @@ export const appRouter = router({
   ledger: ledgerRouter,
   attachment: attachmentRouter,
   setting: settingRouter,
+  googleSheets: googleSheetsRouter,
+  rental: rentalRouter,
 });
 
 export type AppRouter = typeof appRouter;

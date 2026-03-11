@@ -4,26 +4,29 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 220 14% 96%;
+    --foreground: 224 71% 4%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 224 71% 4%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
+    --popover-foreground: 224 71% 4%;
+    --primary: 217 72% 52%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 14% 93%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 72% 52%;
     --radius: 0.5rem;
+    --sidebar-bg: 222 47% 11%;
+    --sidebar-text: 220 14% 80%;
+    --sidebar-active: 217 72% 52%;
   }
 }
 
@@ -32,7 +35,58 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Scrollbar styling */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(220 13% 85%) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(220 13% 85%);
+    border-radius: 3px;
+  }
+}
+
+/* Print styles */
+@media print {
+  body { background: white !important; }
+  .print\:hidden { display: none !important; }
+  .print\:shadow-none { box-shadow: none !important; }
+  .print\:border-0 { border: 0 !important; }
+}
+
+/* Professional table styles */
+@layer components {
+  .data-table {
+    @apply w-full text-sm;
+  }
+  .data-table thead tr {
+    @apply border-b bg-gray-50/80 text-left;
+  }
+  .data-table thead th {
+    @apply px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+  .data-table tbody tr {
+    @apply border-b last:border-0 transition-colors;
+  }
+  .data-table tbody tr:hover {
+    @apply bg-blue-50/40;
+  }
+  .data-table tbody td {
+    @apply px-4 py-3;
   }
 }

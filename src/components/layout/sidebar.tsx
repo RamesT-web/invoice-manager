@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ShoppingCart,
   BarChart3,
+  Paperclip,
   ShieldCheck,
   ShieldAlert,
 } from "lucide-react";
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
       { label: "Invoices", href: "/invoices" },
       { label: "Quotes", href: "/quotes" },
       { label: "Credit Notes", href: "/credit-notes" },
+      { label: "Rental Invoicing", href: "/rental-invoicing" },
     ],
   },
   {
@@ -70,6 +72,11 @@ const navItems: NavItem[] = [
       { label: "Import Statement", href: "/banking/import" },
       { label: "Reconcile", href: "/banking/reconcile" },
     ],
+  },
+  {
+    label: "Documents",
+    href: "/documents",
+    icon: Paperclip,
   },
   {
     label: "Reports",
@@ -115,10 +122,10 @@ function BackupIndicator() {
     <Link
       href="/reports"
       className={cn(
-        "flex items-center gap-2 px-3 py-2 mx-2 rounded-md text-xs transition-colors",
+        "flex items-center gap-2 px-3 py-2 mx-3 rounded-md text-xs transition-colors",
         isStale
-          ? "bg-orange-50 text-orange-700 hover:bg-orange-100"
-          : "bg-green-50 text-green-700 hover:bg-green-100"
+          ? "bg-orange-500/10 text-orange-300 hover:bg-orange-500/20"
+          : "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
       )}
       title={lastBackup ? `Last backup: ${lastBackup.toLocaleString()}` : "No backup recorded"}
     >
@@ -136,27 +143,25 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 z-30">
-      <div className="flex flex-col flex-grow border-r bg-white pt-5 pb-4 overflow-y-auto">
+    <aside className="hidden md:flex md:w-[220px] md:flex-col md:fixed md:inset-y-0 z-30">
+      <div className="flex flex-col flex-grow bg-[#1B2A4A] overflow-y-auto scrollbar-thin">
         {/* Logo */}
-        <div className="flex items-center px-4 mb-6">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <FileText className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-lg font-semibold">Invoice Manager</span>
+        <div className="flex items-center gap-2.5 px-5 h-14 border-b border-white/10 shrink-0">
+          <div className="h-7 w-7 rounded-lg bg-blue-500 flex items-center justify-center">
+            <FileText className="h-4 w-4 text-white" />
           </div>
+          <span className="text-[15px] font-semibold text-white tracking-tight">Invoice Manager</span>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-2 space-y-1">
+        <nav className="flex-1 px-3 py-3 space-y-0.5">
           {navItems.map((item) => (
             <NavItemComponent key={item.href} item={item} pathname={pathname} />
           ))}
         </nav>
 
-        {/* Backup status indicator */}
-        <div className="mt-2 mb-1">
+        {/* Backup status */}
+        <div className="pb-3 shrink-0">
           <BackupIndicator />
         </div>
       </div>
@@ -179,32 +184,32 @@ function NavItemComponent({ item, pathname }: { item: NavItem; pathname: string 
         <button
           onClick={() => setExpanded(!expanded)}
           className={cn(
-            "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
             isActive
-              ? "text-primary"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              ? "text-white bg-white/10"
+              : "text-slate-400 hover:text-white hover:bg-white/5"
           )}
         >
-          <item.icon className="h-4 w-4" />
-          {item.label}
+          <item.icon className="h-[18px] w-[18px] shrink-0" />
+          <span className="flex-1 text-left">{item.label}</span>
           <ChevronDown
             className={cn(
-              "h-4 w-4 ml-auto transition-transform",
+              "h-3.5 w-3.5 transition-transform duration-200 opacity-60",
               expanded && "rotate-180"
             )}
           />
         </button>
         {expanded && (
-          <div className="ml-7 mt-1 space-y-1">
+          <div className="ml-[30px] mt-0.5 space-y-0.5 border-l border-white/10 pl-2.5">
             {item.children.map((child) => (
               <Link
                 key={child.href}
                 href={child.href}
                 className={cn(
-                  "flex items-center rounded-md px-3 py-1.5 text-sm transition-colors",
+                  "flex items-center rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
                   pathname.startsWith(child.href)
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    ? "text-white bg-blue-500/20 font-medium"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
                 )}
               >
                 {child.label}
@@ -220,13 +225,13 @@ function NavItemComponent({ item, pathname }: { item: NavItem; pathname: string 
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        "flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
         isActive
-          ? "bg-primary/10 text-primary"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+          ? "text-white bg-white/10"
+          : "text-slate-400 hover:text-white hover:bg-white/5"
       )}
     >
-      <item.icon className="h-4 w-4" />
+      <item.icon className="h-[18px] w-[18px] shrink-0" />
       {item.label}
     </Link>
   );

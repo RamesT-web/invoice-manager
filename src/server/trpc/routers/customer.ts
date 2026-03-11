@@ -29,7 +29,7 @@ export const customerRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
+        companyId: z.string(),
         search: z.string().optional(),
         showDeleted: z.boolean().optional(),
       })
@@ -59,7 +59,7 @@ export const customerRouter = router({
     }),
 
   get: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.customer.findUniqueOrThrow({
         where: { id: input.id, deletedAt: null },
@@ -67,7 +67,7 @@ export const customerRouter = router({
     }),
 
   create: protectedProcedure
-    .input(customerInput.extend({ companyId: z.string().uuid() }))
+    .input(customerInput.extend({ companyId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { companyId, ...data } = input;
       return ctx.db.customer.create({
@@ -81,7 +81,7 @@ export const customerRouter = router({
     }),
 
   update: protectedProcedure
-    .input(customerInput.extend({ id: z.string().uuid() }))
+    .input(customerInput.extend({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
       return ctx.db.customer.update({
@@ -91,7 +91,7 @@ export const customerRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.customer.update({
         where: { id: input.id },
@@ -100,7 +100,7 @@ export const customerRouter = router({
     }),
 
   restore: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.customer.update({
         where: { id: input.id },

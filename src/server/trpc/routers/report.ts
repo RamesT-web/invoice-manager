@@ -4,7 +4,7 @@ import { router, protectedProcedure } from "../trpc";
 export const reportRouter = router({
   /** Outstanding aging report — customer-wise */
   outstandingAging: protectedProcedure
-    .input(z.object({ companyId: z.string().uuid() }))
+    .input(z.object({ companyId: z.string() }))
     .query(async ({ ctx, input }) => {
       const invoices = await ctx.db.invoice.findMany({
         where: {
@@ -51,7 +51,7 @@ export const reportRouter = router({
 
   /** TDS register — invoice-wise */
   tdsRegister: protectedProcedure
-    .input(z.object({ companyId: z.string().uuid() }))
+    .input(z.object({ companyId: z.string() }))
     .query(async ({ ctx, input }) => {
       const invoices = await ctx.db.invoice.findMany({
         where: {
@@ -88,7 +88,7 @@ export const reportRouter = router({
 
   /** Sales summary — month-wise */
   salesSummary: protectedProcedure
-    .input(z.object({ companyId: z.string().uuid() }))
+    .input(z.object({ companyId: z.string() }))
     .query(async ({ ctx, input }) => {
       const invoices = await ctx.db.invoice.findMany({
         where: {
@@ -148,7 +148,7 @@ export const reportRouter = router({
 
   /** Vendor GST / GSTR-2B register — vendor bill-wise */
   vendorGstRegister: protectedProcedure
-    .input(z.object({ companyId: z.string().uuid() }))
+    .input(z.object({ companyId: z.string() }))
     .query(async ({ ctx, input }) => {
       const bills = await ctx.db.vendorBill.findMany({
         where: {
@@ -197,7 +197,7 @@ export const reportRouter = router({
 
   /** Data backup — all core data as JSON for CSV export */
   dataBackup: protectedProcedure
-    .input(z.object({ companyId: z.string().uuid() }))
+    .input(z.object({ companyId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [customers, vendors, invoices, vendorBills, payments] = await Promise.all([
         ctx.db.customer.findMany({

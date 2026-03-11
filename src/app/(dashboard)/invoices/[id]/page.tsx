@@ -7,11 +7,10 @@ import { useCompanyStore } from "@/lib/hooks/use-company";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { INVOICE_STATUSES, INDIAN_STATES, PAYMENT_MODES, TDS_RATES, TDS_CERTIFICATE_STATUSES } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { ArrowLeft, Loader2, Printer, Send, CheckCircle, XCircle, IndianRupee, ChevronDown, ChevronUp, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Printer, Send, CheckCircle, XCircle, IndianRupee, ChevronDown, ChevronUp, Save, Download } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { AttachmentPanel } from "@/components/attachments/attachment-panel";
@@ -119,10 +118,39 @@ export default function InvoiceDetailPage() {
   function getStatusBadge(status: string) {
     const s = INVOICE_STATUSES.find((st) => st.value === status);
     return (
-      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${s?.color ?? "bg-gray-100 text-gray-700"}`}>
+      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${s?.color ?? "bg-gray-100 text-gray-700"}`}>
         {s?.label ?? status}
       </span>
     );
+  }
+
+  const downloadPdf = trpc.invoice.downloadPdf.useMutation();
+
+  async function handleDownloadPdf() {
+    if (!activeCompanyId) return;
+    try {
+      const result = await downloadPdf.mutateAsync({
+        id: invoiceId,
+        companyId: activeCompanyId,
+      });
+      const byteChars = atob(result.pdf);
+      const byteNumbers = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNumbers[i] = byteChars.charCodeAt(i);
+      }
+      const blob = new Blob([byteNumbers], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF download failed:", err);
+      alert("Failed to generate PDF. Please try again.");
+    }
   }
 
   function handlePrint() {
@@ -142,7 +170,7 @@ export default function InvoiceDetailPage() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     );
   }
@@ -150,263 +178,277 @@ export default function InvoiceDetailPage() {
   if (!invoice) {
     return (
       <div className="text-center py-16">
-        <p className="text-muted-foreground">Invoice not found.</p>
+        <p className="text-gray-500">Invoice not found.</p>
         <Link href="/invoices"><Button variant="outline" className="mt-4">Back to Invoices</Button></Link>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 max-w-4xl">
-      {/* Header - hidden during print */}
+    <div className="space-y-4 max-w-4xl mx-auto">
+      {/* Header */}
       <div className="flex items-center gap-3 print:hidden">
-        <Link href="/invoices"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">{invoice.invoiceNumber}</h1>
-          <p className="text-sm text-muted-foreground">{invoice.customer.name}</p>
+        <Link href="/invoices">
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-gray-100">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold text-gray-900">{invoice.invoiceNumber}</h1>
+            {getStatusBadge(invoice.status)}
+          </div>
+          <p className="text-sm text-gray-500">{invoice.customer.name}</p>
         </div>
-        {getStatusBadge(invoice.status)}
       </div>
 
-      {/* Actions - hidden during print */}
+      {/* Action buttons */}
       <div className="flex flex-wrap gap-2 print:hidden">
-        <Button variant="outline" size="sm" onClick={handlePrint}>
-          <Printer className="h-4 w-4 mr-1" /> Print / PDF
+        <Button variant="outline" size="sm" className="h-9" onClick={handleDownloadPdf} disabled={downloadPdf.isPending}>
+          {downloadPdf.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+          Download PDF
+        </Button>
+        <Button variant="outline" size="sm" className="h-9" onClick={handlePrint}>
+          <Printer className="h-4 w-4 mr-1.5" /> Print
         </Button>
         {invoice.status === "draft" && (
-          <Button
-            size="sm"
+          <Button size="sm" className="h-9 bg-blue-600 hover:bg-blue-700"
             onClick={() => updateStatus.mutate({ id: invoiceId, status: "sent" })}
             disabled={updateStatus.isPending}
           >
-            <Send className="h-4 w-4 mr-1" /> Mark as Sent
+            <Send className="h-4 w-4 mr-1.5" /> Mark as Sent
           </Button>
         )}
         {(invoice.status === "sent" || invoice.status === "partially_paid") && (
-          <Button
-            size="sm"
-            variant="outline"
+          <Button variant="outline" size="sm" className="h-9"
             onClick={() => updateStatus.mutate({ id: invoiceId, status: "paid" })}
             disabled={updateStatus.isPending}
           >
-            <CheckCircle className="h-4 w-4 mr-1" /> Mark as Paid
+            <CheckCircle className="h-4 w-4 mr-1.5" /> Mark as Paid
           </Button>
         )}
         {(invoice.status === "sent" || invoice.status === "partially_paid" || invoice.status === "overdue") && (
-          <Button
-            size="sm"
-            onClick={openPayDialog}
-          >
-            <IndianRupee className="h-4 w-4 mr-1" /> Record Payment
+          <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700" onClick={openPayDialog}>
+            <IndianRupee className="h-4 w-4 mr-1.5" /> Record Payment
           </Button>
         )}
         {invoice.status !== "cancelled" && invoice.status !== "paid" && (
-          <Button
-            size="sm"
-            variant="outline"
+          <Button variant="outline" size="sm" className="h-9 text-gray-500 hover:text-red-600 hover:border-red-200"
             onClick={() => updateStatus.mutate({ id: invoiceId, status: "cancelled" })}
             disabled={updateStatus.isPending}
           >
-            <XCircle className="h-4 w-4 mr-1" /> Cancel
+            <XCircle className="h-4 w-4 mr-1.5" /> Cancel
           </Button>
         )}
       </div>
 
       {/* Printable Invoice */}
-      <div ref={printRef} className="bg-white print:shadow-none">
-        <Card className="print:shadow-none print:border-0">
-          <CardContent className="p-6 sm:p-8 space-y-6">
-            {/* Company & Invoice Info Header */}
-            <div className="flex flex-col sm:flex-row justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-bold">{company?.legalName || company?.name}</h2>
-                {company?.gstin && <p className="text-sm font-mono">GSTIN: {company.gstin}</p>}
-                <p className="text-sm text-muted-foreground mt-1">
-                  {[company?.addressLine1, company?.addressLine2, company?.city, company?.stateName, company?.pincode]
-                    .filter(Boolean)
-                    .join(", ")}
+      <div ref={printRef} className="bg-white rounded-lg border print:shadow-none print:border-0">
+        <div className="p-6 sm:p-8 space-y-6">
+          {/* Company & Invoice Info Header */}
+          <div className="flex flex-col sm:flex-row justify-between gap-6">
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-gray-900">{company?.legalName || company?.name}</h2>
+              {company?.gstin && (
+                <p className="text-sm">
+                  <span className="text-gray-500">GSTIN:</span>{" "}
+                  <span className="font-mono font-medium">{company.gstin}</span>
                 </p>
-                {company?.phone && <p className="text-sm text-muted-foreground">Phone: {company.phone}</p>}
-                {company?.email && <p className="text-sm text-muted-foreground">Email: {company.email}</p>}
-              </div>
-              <div className="text-left sm:text-right">
-                <h3 className="text-2xl font-bold text-primary">INVOICE</h3>
-                <p className="font-mono font-medium">{invoice.invoiceNumber}</p>
-                <div className="mt-2 text-sm space-y-0.5">
-                  <p><span className="text-muted-foreground">Date:</span> {formatDate(invoice.invoiceDate)}</p>
-                  <p><span className="text-muted-foreground">Due:</span> {formatDate(invoice.dueDate)}</p>
-                  {invoice.placeOfSupply && (
-                    <p><span className="text-muted-foreground">Place of Supply:</span> {getStateName(invoice.placeOfSupply)}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <hr />
-
-            {/* Bill To */}
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Bill To</p>
-              <p className="font-semibold">{invoice.customer.name}</p>
-              {invoice.customer.gstin && <p className="text-sm font-mono">GSTIN: {invoice.customer.gstin}</p>}
-              <p className="text-sm text-muted-foreground">
-                {[
-                  invoice.customer.billingAddressLine1,
-                  invoice.customer.billingAddressLine2,
-                  invoice.customer.billingCity,
-                  invoice.customer.billingStateName,
-                  invoice.customer.billingPincode,
-                ]
+              )}
+              <p className="text-sm text-gray-500 leading-relaxed max-w-xs">
+                {[company?.addressLine1, company?.addressLine2, company?.city, company?.stateName, company?.pincode]
                   .filter(Boolean)
                   .join(", ")}
               </p>
-              {invoice.customer.contactEmail && (
-                <p className="text-sm text-muted-foreground">{invoice.customer.contactEmail}</p>
-              )}
-              {invoice.customer.contactPhone && (
-                <p className="text-sm text-muted-foreground">{invoice.customer.contactPhone}</p>
-              )}
+              {company?.phone && <p className="text-sm text-gray-500">Phone: {company.phone}</p>}
+              {company?.email && <p className="text-sm text-gray-500">Email: {company.email}</p>}
             </div>
+            <div className="sm:text-right shrink-0">
+              <h3 className="text-2xl font-bold text-blue-600 tracking-wide">INVOICE</h3>
+              <p className="font-mono text-base font-semibold text-gray-900 mt-1">{invoice.invoiceNumber}</p>
+              <div className="mt-3 space-y-1">
+                <DetailRow label="Date" value={formatDate(invoice.invoiceDate)} />
+                <DetailRow label="Due Date" value={formatDate(invoice.dueDate)} />
+                {invoice.placeOfSupply && (
+                  <DetailRow label="Place of Supply" value={getStateName(invoice.placeOfSupply)} />
+                )}
+              </div>
+            </div>
+          </div>
 
-            {/* Line items table */}
-            <div className="overflow-x-auto">
+          <div className="border-t" />
+
+          {/* Bill To */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Bill To</p>
+            <p className="font-semibold text-gray-900">{invoice.customer.name}</p>
+            {invoice.customer.gstin && (
+              <p className="text-sm mt-0.5">
+                <span className="text-gray-500">GSTIN:</span>{" "}
+                <span className="font-mono">{invoice.customer.gstin}</span>
+              </p>
+            )}
+            <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+              {[
+                invoice.customer.billingAddressLine1,
+                invoice.customer.billingAddressLine2,
+                invoice.customer.billingCity,
+                invoice.customer.billingStateName,
+                invoice.customer.billingPincode,
+              ]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+            {invoice.customer.contactEmail && (
+              <p className="text-sm text-gray-500">{invoice.customer.contactEmail}</p>
+            )}
+            {invoice.customer.contactPhone && (
+              <p className="text-sm text-gray-500">{invoice.customer.contactPhone}</p>
+            )}
+          </div>
+
+          {/* Line items table */}
+          <div className="overflow-x-auto -mx-6 sm:-mx-8">
+            <div className="px-6 sm:px-8">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-t text-left">
-                    <th className="py-2 pr-2 font-medium">#</th>
-                    <th className="py-2 pr-2 font-medium">Description</th>
-                    <th className="py-2 pr-2 font-medium">HSN/SAC</th>
-                    <th className="py-2 pr-2 font-medium text-right">Qty</th>
-                    <th className="py-2 pr-2 font-medium text-right">Rate</th>
-                    <th className="py-2 pr-2 font-medium text-right">GST%</th>
-                    <th className="py-2 font-medium text-right">Amount</th>
+                  <tr className="border-y bg-gray-50/80">
+                    <th className="py-2.5 pl-0 pr-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 w-10">#</th>
+                    <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">Description</th>
+                    <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 w-[80px]">HSN/SAC</th>
+                    <th className="py-2.5 px-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500 w-[80px]">Qty</th>
+                    <th className="py-2.5 px-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500 w-[100px]">Rate</th>
+                    <th className="py-2.5 px-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500 w-[60px]">GST%</th>
+                    <th className="py-2.5 pl-3 pr-0 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500 w-[110px]">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {invoice.lines.map((line, idx) => (
-                    <tr key={line.id} className="border-b">
-                      <td className="py-2 pr-2 text-muted-foreground">{idx + 1}</td>
-                      <td className="py-2 pr-2">{line.description}</td>
-                      <td className="py-2 pr-2 font-mono text-xs">{line.hsnSacCode || "—"}</td>
-                      <td className="py-2 pr-2 text-right">
+                    <tr key={line.id} className="border-b border-gray-100">
+                      <td className="py-3 pl-0 pr-3 text-gray-400 tabular-nums">{idx + 1}</td>
+                      <td className="py-3 px-3 text-gray-900">{line.description}</td>
+                      <td className="py-3 px-3 font-mono text-xs text-gray-500">{line.hsnSacCode || "\u2014"}</td>
+                      <td className="py-3 px-3 text-right tabular-nums text-gray-700">
                         {Number(line.quantity)} {line.unit}
                       </td>
-                      <td className="py-2 pr-2 text-right">{formatCurrency(Number(line.rate))}</td>
-                      <td className="py-2 pr-2 text-right">{Number(line.gstRate)}%</td>
-                      <td className="py-2 text-right font-medium">{formatCurrency(Number(line.lineTotal))}</td>
+                      <td className="py-3 px-3 text-right tabular-nums text-gray-700">{formatCurrency(Number(line.rate))}</td>
+                      <td className="py-3 px-3 text-right tabular-nums text-gray-500">{Number(line.gstRate)}%</td>
+                      <td className="py-3 pl-3 pr-0 text-right font-semibold text-gray-900 tabular-nums">{formatCurrency(Number(line.lineTotal))}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </div>
 
-            {/* Totals */}
-            <div className="flex justify-end">
-              <div className="w-full max-w-xs space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatCurrency(Number(invoice.subtotal))}</span>
+          {/* Totals */}
+          <div className="flex justify-end">
+            <div className="w-full max-w-[300px] space-y-1.5">
+              <TotalRow label="Subtotal" value={formatCurrency(Number(invoice.subtotal))} />
+              {Number(invoice.discountAmount) > 0 && (
+                <TotalRow label="Discount" value={`-${formatCurrency(Number(invoice.discountAmount))}`} valueColor="text-emerald-600" />
+              )}
+              <TotalRow label="Taxable Amount" value={formatCurrency(Number(invoice.taxableAmount))} />
+              {!isInterState ? (
+                <>
+                  <TotalRow label="CGST" value={formatCurrency(Number(invoice.cgstAmount))} />
+                  <TotalRow label="SGST" value={formatCurrency(Number(invoice.sgstAmount))} />
+                </>
+              ) : (
+                <TotalRow label="IGST" value={formatCurrency(Number(invoice.igstAmount))} />
+              )}
+              <div className="border-t-2 border-gray-900 pt-2 flex justify-between items-center">
+                <span className="font-bold text-gray-900">Total</span>
+                <span className="font-bold text-lg text-gray-900 tabular-nums">{formatCurrency(Number(invoice.totalAmount))}</span>
+              </div>
+              {Number(invoice.amountPaid) > 0 && (
+                <>
+                  <TotalRow label="Paid" value={`-${formatCurrency(Number(invoice.amountPaid))}`} valueColor="text-emerald-600" />
+                  <div className="border-t pt-2 flex justify-between items-center">
+                    <span className="font-bold text-gray-900">Balance Due</span>
+                    <span className="font-bold text-lg text-blue-600 tabular-nums">{formatCurrency(Number(invoice.balanceDue))}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Bank details */}
+          {invoice.bankName && (
+            <div className="border-t pt-5">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Bank Details</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div>
+                  <p className="text-gray-500 text-xs">Bank</p>
+                  <p className="font-medium text-gray-900">{invoice.bankName}</p>
                 </div>
-                {Number(invoice.discountAmount) > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount</span>
-                    <span>-{formatCurrency(Number(invoice.discountAmount))}</span>
+                {invoice.bankAccountNo && (
+                  <div>
+                    <p className="text-gray-500 text-xs">A/C No</p>
+                    <p className="font-mono font-medium text-gray-900">{invoice.bankAccountNo}</p>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Taxable Amount</span>
-                  <span>{formatCurrency(Number(invoice.taxableAmount))}</span>
-                </div>
-                {!isInterState ? (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">CGST</span>
-                      <span>{formatCurrency(Number(invoice.cgstAmount))}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">SGST</span>
-                      <span>{formatCurrency(Number(invoice.sgstAmount))}</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">IGST</span>
-                    <span>{formatCurrency(Number(invoice.igstAmount))}</span>
+                {invoice.bankIfsc && (
+                  <div>
+                    <p className="text-gray-500 text-xs">IFSC</p>
+                    <p className="font-mono font-medium text-gray-900">{invoice.bankIfsc}</p>
                   </div>
                 )}
-                <div className="border-t pt-1 flex justify-between font-bold text-base">
-                  <span>Total</span>
-                  <span>{formatCurrency(Number(invoice.totalAmount))}</span>
-                </div>
-                {Number(invoice.amountPaid) > 0 && (
-                  <>
-                    <div className="flex justify-between text-green-600">
-                      <span>Paid</span>
-                      <span>-{formatCurrency(Number(invoice.amountPaid))}</span>
-                    </div>
-                    <div className="border-t pt-1 flex justify-between font-bold text-base">
-                      <span>Balance Due</span>
-                      <span>{formatCurrency(Number(invoice.balanceDue))}</span>
-                    </div>
-                  </>
+                {invoice.bankBranch && (
+                  <div>
+                    <p className="text-gray-500 text-xs">Branch</p>
+                    <p className="font-medium text-gray-900">{invoice.bankBranch}</p>
+                  </div>
+                )}
+                {invoice.bankUpiId && (
+                  <div>
+                    <p className="text-gray-500 text-xs">UPI</p>
+                    <p className="font-mono font-medium text-gray-900">{invoice.bankUpiId}</p>
+                  </div>
                 )}
               </div>
             </div>
+          )}
 
-            {/* Bank details */}
-            {invoice.bankName && (
-              <div className="border-t pt-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Bank Details</p>
-                <div className="text-sm space-y-0.5">
-                  <p>Bank: {invoice.bankName}</p>
-                  {invoice.bankAccountNo && <p>A/C No: {invoice.bankAccountNo}</p>}
-                  {invoice.bankIfsc && <p>IFSC: {invoice.bankIfsc}</p>}
-                  {invoice.bankBranch && <p>Branch: {invoice.bankBranch}</p>}
-                  {invoice.bankUpiId && <p>UPI: {invoice.bankUpiId}</p>}
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            {invoice.notes && (
-              <div className="border-t pt-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Notes / Terms</p>
-                <p className="text-sm whitespace-pre-wrap">{invoice.notes}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          {/* Notes */}
+          {invoice.notes && (
+            <div className="border-t pt-5">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Notes / Terms</p>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{invoice.notes}</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Payment history */}
       {invoice.payments && invoice.payments.length > 0 && (
-        <Card className="print:hidden">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Payment History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <table className="w-full text-sm">
+        <div className="bg-white rounded-lg border print:hidden">
+          <div className="px-6 py-4 border-b">
+            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Payment History</h3>
+          </div>
+          <div className="p-6">
+            <table className="data-table">
               <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="py-2 font-medium">Date</th>
-                  <th className="py-2 font-medium">Mode</th>
-                  <th className="py-2 font-medium">Reference</th>
-                  <th className="py-2 font-medium text-right">Amount</th>
+                <tr>
+                  <th>Date</th>
+                  <th>Mode</th>
+                  <th>Reference</th>
+                  <th className="text-right">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {invoice.payments.map((p) => (
-                  <tr key={p.id} className="border-b last:border-0">
-                    <td className="py-2">{formatDate(p.paymentDate)}</td>
-                    <td className="py-2 capitalize">{p.paymentMode.replace("_", " ")}</td>
-                    <td className="py-2 font-mono text-xs">{p.referenceNumber || "—"}</td>
-                    <td className="py-2 text-right font-medium">{formatCurrency(Number(p.amount))}</td>
+                  <tr key={p.id}>
+                    <td className="text-gray-700">{formatDate(p.paymentDate)}</td>
+                    <td className="text-gray-700 capitalize">{p.paymentMode.replace("_", " ")}</td>
+                    <td className="font-mono text-xs text-gray-500">{p.referenceNumber || "\u2014"}</td>
+                    <td className="text-right font-semibold text-gray-900 tabular-nums">{formatCurrency(Number(p.amount))}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Attachments */}
@@ -414,15 +456,16 @@ export default function InvoiceDetailPage() {
 
       {/* TDS & Compliance */}
       {invoice.status !== "draft" && invoice.status !== "cancelled" && (
-        <Card className="print:hidden">
-          <CardHeader className="pb-2 cursor-pointer" onClick={() => setComplianceOpen(!complianceOpen)}>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">TDS & Compliance</CardTitle>
-              {complianceOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </div>
-          </CardHeader>
+        <div className="bg-white rounded-lg border print:hidden">
+          <button
+            className="w-full flex items-center justify-between px-6 py-4"
+            onClick={() => setComplianceOpen(!complianceOpen)}
+          >
+            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">TDS & Compliance</h3>
+            {complianceOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+          </button>
           {complianceOpen && (
-            <CardContent className="space-y-4">
+            <div className="px-6 pb-6 space-y-4 border-t pt-4">
               {/* TDS Section */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -431,17 +474,17 @@ export default function InvoiceDetailPage() {
                     id="tds-applicable"
                     checked={tdsApplicable}
                     onChange={(e) => setTdsApplicable(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <Label htmlFor="tds-applicable" className="font-medium">TDS Applicable</Label>
+                  <Label htmlFor="tds-applicable" className="font-medium text-gray-700">TDS Applicable</Label>
                 </div>
 
                 {tdsApplicable && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pl-6">
                     <div className="space-y-1">
-                      <Label className="text-xs">TDS Rate %</Label>
+                      <Label className="text-xs text-gray-500">TDS Rate %</Label>
                       <select
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                        className="flex h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={tdsRate}
                         onChange={(e) => {
                           const rate = parseFloat(e.target.value);
@@ -453,19 +496,19 @@ export default function InvoiceDetailPage() {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">TDS Amount</Label>
+                      <Label className="text-xs text-gray-500">TDS Amount</Label>
                       <Input
                         type="number"
                         step="0.01"
-                        className="h-9"
+                        className="h-9 bg-gray-50"
                         value={tdsAmount}
                         onChange={(e) => setTdsAmount(parseFloat(e.target.value) || 0)}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Certificate Status</Label>
+                      <Label className="text-xs text-gray-500">Certificate Status</Label>
                       <select
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                        className="flex h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={tdsCertStatus}
                         onChange={(e) => setTdsCertStatus(e.target.value)}
                       >
@@ -474,10 +517,10 @@ export default function InvoiceDetailPage() {
                     </div>
                     {tdsCertStatus === "received" && (
                       <div className="space-y-1">
-                        <Label className="text-xs">Received Date</Label>
+                        <Label className="text-xs text-gray-500">Received Date</Label>
                         <Input
                           type="date"
-                          className="h-9"
+                          className="h-9 bg-gray-50"
                           value={tdsCertDate}
                           onChange={(e) => setTdsCertDate(e.target.value)}
                         />
@@ -488,22 +531,22 @@ export default function InvoiceDetailPage() {
               </div>
 
               {/* Follow-up */}
-              <div className="border-t pt-3 space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">Follow-up</p>
+              <div className="border-t pt-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Follow-up</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Next Follow-up Date</Label>
+                    <Label className="text-xs text-gray-500">Next Follow-up Date</Label>
                     <Input
                       type="date"
-                      className="h-9"
+                      className="h-9 bg-gray-50"
                       value={followUpDate}
                       onChange={(e) => setFollowUpDate(e.target.value)}
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Notes</Label>
+                    <Label className="text-xs text-gray-500">Notes</Label>
                     <Input
-                      className="h-9"
+                      className="h-9 bg-gray-50"
                       value={followUpNotes}
                       onChange={(e) => setFollowUpNotes(e.target.value)}
                       placeholder="Follow-up notes..."
@@ -514,14 +557,14 @@ export default function InvoiceDetailPage() {
 
               {/* Save button */}
               <div className="flex justify-end pt-1">
-                <Button size="sm" onClick={saveCompliance} disabled={updateCompliance.isPending}>
-                  {updateCompliance.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                <Button size="sm" className="h-9 bg-blue-600 hover:bg-blue-700" onClick={saveCompliance} disabled={updateCompliance.isPending}>
+                  {updateCompliance.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
                   Save Compliance
                 </Button>
               </div>
-            </CardContent>
+            </div>
           )}
-        </Card>
+        </div>
       )}
 
       {/* Delete (only for drafts) */}
@@ -530,7 +573,7 @@ export default function InvoiceDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="h-9 text-red-500 hover:text-red-600 hover:bg-red-50 hover:border-red-200"
             onClick={() => {
               if (confirm("Delete this draft invoice?")) {
                 deleteMutation.mutate({ id: invoiceId });
@@ -548,41 +591,65 @@ export default function InvoiceDetailPage() {
         <DialogHeader>
           <DialogTitle>Record Payment for {invoice.invoiceNumber}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handlePaySubmit} className="space-y-3">
-          <div className="text-sm text-muted-foreground">
-            Balance due: <span className="font-medium text-foreground">{formatCurrency(Number(invoice.balanceDue))}</span>
+        <form onSubmit={handlePaySubmit} className="space-y-4">
+          <div className="text-sm text-gray-500">
+            Balance due: <span className="font-semibold text-gray-900">{formatCurrency(Number(invoice.balanceDue))}</span>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>Date *</Label>
-              <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} required />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600">Date *</Label>
+              <Input type="date" className="h-9 bg-gray-50" value={payDate} onChange={(e) => setPayDate(e.target.value)} required />
             </div>
-            <div className="space-y-1">
-              <Label>Amount *</Label>
-              <Input type="number" step="0.01" min="0.01" value={payAmount} onChange={(e) => setPayAmount(parseFloat(e.target.value) || 0)} required />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600">Amount *</Label>
+              <Input type="number" step="0.01" min="0.01" className="h-9 bg-gray-50" value={payAmount} onChange={(e) => setPayAmount(parseFloat(e.target.value) || 0)} required />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>Mode</Label>
-              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={payMode} onChange={(e) => setPayMode(e.target.value)}>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600">Mode</Label>
+              <select
+                className="flex h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={payMode}
+                onChange={(e) => setPayMode(e.target.value)}
+              >
                 {PAYMENT_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
-            <div className="space-y-1">
-              <Label>Reference #</Label>
-              <Input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="UTR / Cheque" />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600">Reference #</Label>
+              <Input className="h-9 bg-gray-50" value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="UTR / Cheque" />
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="outline" onClick={() => setPayDialogOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={recordPayment.isPending}>
-              {recordPayment.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setPayDialogOpen(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="h-9 bg-blue-600 hover:bg-blue-700" disabled={recordPayment.isPending}>
+              {recordPayment.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
               Record Payment
             </Button>
           </div>
         </form>
       </Dialog>
+    </div>
+  );
+}
+
+/* ---- Helper components ---- */
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm sm:justify-end">
+      <span className="text-gray-500">{label}:</span>
+      <span className="font-medium text-gray-900">{value}</span>
+    </div>
+  );
+}
+
+function TotalRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <div className="flex justify-between items-center text-sm">
+      <span className="text-gray-500">{label}</span>
+      <span className={`font-medium tabular-nums ${valueColor ?? "text-gray-900"}`}>{value}</span>
     </div>
   );
 }

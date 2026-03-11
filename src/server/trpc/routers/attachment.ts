@@ -7,8 +7,8 @@ export const attachmentRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        entityType: z.enum(["invoice", "vendor_bill"]),
-        entityId: z.string().uuid(),
+        entityType: z.enum(["invoice", "vendor_bill", "document"]),
+        entityId: z.string(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -24,7 +24,7 @@ export const attachmentRouter = router({
 
   /** Soft delete an attachment and remove file from storage */
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const attachment = await ctx.db.attachment.update({
         where: { id: input.id },
@@ -37,9 +37,29 @@ export const attachmentRouter = router({
       return attachment;
     }),
 
+  /** List documents (general attachments not tied to invoices/bills) */
+  listDocuments: protectedProcedure
+    .input(
+      z.object({
+        companyId: z.string(),
+        category: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.db.attachment.findMany({
+        where: {
+          companyId: input.companyId,
+          entityType: "document",
+          ...(input.category ? { entityId: input.category } : {}),
+          deletedAt: null,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }),
+
   /** List all attachment records for backup (company-scoped) */
   backupIndex: protectedProcedure
-    .input(z.object({ companyId: z.string().uuid() }))
+    .input(z.object({ companyId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.attachment.findMany({
         where: {

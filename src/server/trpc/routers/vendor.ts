@@ -5,7 +5,7 @@ export const vendorRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
+        companyId: z.string(),
         search: z.string().optional(),
         showDeleted: z.boolean().optional(),
       })
@@ -34,7 +34,7 @@ export const vendorRouter = router({
     }),
 
   get: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.vendor.findUniqueOrThrow({
         where: { id: input.id, deletedAt: null },
@@ -44,7 +44,7 @@ export const vendorRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
+        companyId: z.string(),
         name: z.string().min(1),
         gstin: z.string().optional().nullable(),
         pan: z.string().optional().nullable(),
@@ -71,7 +71,7 @@ export const vendorRouter = router({
   update: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string(),
         name: z.string().min(1).optional(),
         gstin: z.string().optional().nullable(),
         pan: z.string().optional().nullable(),
@@ -97,7 +97,7 @@ export const vendorRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.vendor.update({
         where: { id: input.id },
@@ -106,7 +106,7 @@ export const vendorRouter = router({
     }),
 
   restore: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.vendor.update({
         where: { id: input.id },

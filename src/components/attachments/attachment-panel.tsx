@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompanyStore } from "@/lib/hooks/use-company";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ function getFileIcon(mimeType: string) {
 }
 
 interface AttachmentPanelProps {
-  entityType: "invoice" | "vendor_bill";
+  entityType: "invoice" | "vendor_bill" | "document";
   entityId: string;
 }
 
@@ -27,6 +27,7 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
   const { activeCompanyId } = useCompanyStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const utils = trpc.useUtils();
 
   const { data: attachments, isLoading } = trpc.attachment.list.useQuery(
@@ -38,9 +39,8 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
     onSuccess: () => utils.attachment.list.invalidate({ entityType, entityId }),
   });
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !activeCompanyId) return;
+  const uploadFile = useCallback(async (file: File) => {
+    if (!activeCompanyId) return;
 
     setUploading(true);
     try {
@@ -67,7 +67,32 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  }, [activeCompanyId, entityType, entityId, utils]);
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
   }
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) uploadFile(file);
+  }, [uploadFile]);
 
   return (
     <Card className="print:hidden">
@@ -88,7 +113,7 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
               type="file"
               className="hidden"
               accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.xlsx,.xls,.doc,.docx,.csv,.txt"
-              onChange={handleUpload}
+              onChange={handleFileInput}
             />
             <Button
               variant="outline"
@@ -107,15 +132,45 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
         </div>
       </CardHeader>
       <CardContent>
+        {/* Drag & Drop Zone */}
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => !uploading && fileInputRef.current?.click()}
+          className={`
+            border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors mb-3
+            ${dragOver
+              ? "border-primary bg-primary/5"
+              : "border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-muted/30"
+            }
+            ${uploading ? "opacity-50 cursor-not-allowed" : ""}
+          `}
+        >
+          {uploading ? (
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Uploading...</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <Upload className={`h-8 w-8 ${dragOver ? "text-primary" : "text-muted-foreground/50"}`} />
+              <p className="text-sm text-muted-foreground">
+                {dragOver ? "Drop file here" : "Drag & drop a file here, or click to browse"}
+              </p>
+              <p className="text-xs text-muted-foreground/70">
+                PDF, images, Excel, Word, CSV (max 10MB)
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* File List */}
         {isLoading ? (
           <div className="flex justify-center py-4">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : !attachments?.length ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No attachments yet. Upload PDFs, images, or documents.
-          </p>
-        ) : (
+        ) : attachments && attachments.length > 0 ? (
           <div className="space-y-2">
             {attachments.map((att) => (
               <div
@@ -155,7 +210,7 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
               </div>
             ))}
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

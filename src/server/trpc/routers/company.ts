@@ -18,7 +18,7 @@ export const companyRouter = router({
 
   /** Get a single company by ID (must be a member) */
   get: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const companyUser = await ctx.db.companyUser.findUnique({
         where: {
@@ -39,7 +39,7 @@ export const companyRouter = router({
   update: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string(),
         name: z.string().min(1).optional(),
         legalName: z.string().optional(),
         gstin: z.string().optional(),
@@ -88,7 +88,7 @@ export const companyRouter = router({
 
   /** Set default company for user */
   setDefault: protectedProcedure
-    .input(z.object({ companyId: z.string().uuid() }))
+    .input(z.object({ companyId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Unset all defaults for this user
       await ctx.db.companyUser.updateMany({

@@ -4,7 +4,6 @@ import { useParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useCompanyStore } from "@/lib/hooks/use-company";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ArrowLeft, Loader2, Download } from "lucide-react";
 import Link from "next/link";
@@ -24,159 +23,93 @@ export default function VendorLedgerPage() {
     const rows = [
       ["Date", "Description", "Debit (Payment)", "Credit (Bill)", "Balance"],
       ["", "Opening Balance", "", "", data.openingBalance.toFixed(2)],
-      ...data.entries.map((e) => [
-        formatDate(e.date),
-        e.description,
-        e.debit > 0 ? e.debit.toFixed(2) : "",
-        e.credit > 0 ? e.credit.toFixed(2) : "",
-        e.balance.toFixed(2),
-      ]),
+      ...data.entries.map((e) => [formatDate(e.date), e.description, e.debit > 0 ? e.debit.toFixed(2) : "", e.credit > 0 ? e.credit.toFixed(2) : "", e.balance.toFixed(2)]),
       ["", "Closing Balance", "", "", data.closingBalance.toFixed(2)],
     ];
     const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.vendor.name.replace(/\s+/g, "_")}_ledger.csv`;
-    a.click();
+    a.href = url; a.download = `${data.vendor.name.replace(/\s+/g, "_")}_ledger.csv`; a.click();
     URL.revokeObjectURL(url);
   }
 
   if (!activeCompanyId) return null;
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="text-center py-16 text-muted-foreground">Vendor not found.</div>
-    );
-  }
+  if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>;
+  if (!data) return <div className="text-center py-16 text-sm text-gray-500">Vendor not found.</div>;
 
   const totalDebit = data.entries.reduce((sum, e) => sum + e.debit, 0);
   const totalCredit = data.entries.reduce((sum, e) => sum + e.credit, 0);
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <Link href="/vendors">
-          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-        </Link>
+        <Link href="/vendors"><Button variant="ghost" size="icon" className="h-9 w-9"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">Vendor Ledger</h1>
-          <p className="text-sm text-muted-foreground">{data.vendor.name}</p>
+          <h1 className="text-xl font-semibold text-gray-900">Vendor Ledger</h1>
+          <p className="text-sm text-gray-500">{data.vendor.name}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={downloadCsv}>
-          <Download className="h-4 w-4 mr-1" /> Export CSV
-        </Button>
+        <Button variant="outline" size="sm" className="h-9" onClick={downloadCsv}><Download className="h-4 w-4 mr-1.5" />Export CSV</Button>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Opening Balance</p>
-            <p className="text-lg font-bold">{formatCurrency(data.openingBalance)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Total Billed</p>
-            <p className="text-lg font-bold">{formatCurrency(totalCredit)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Total Paid</p>
-            <p className="text-lg font-bold text-green-600">{formatCurrency(totalDebit)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Amount Payable</p>
-            <p className={`text-lg font-bold ${data.closingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
-              {formatCurrency(data.closingBalance)}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="bg-white rounded-lg border p-4">
+          <p className="text-xs text-gray-500 font-medium">Opening Balance</p>
+          <p className="text-lg font-bold text-gray-900 tabular-nums">{formatCurrency(data.openingBalance)}</p>
+        </div>
+        <div className="bg-white rounded-lg border p-4">
+          <p className="text-xs text-gray-500 font-medium">Total Billed</p>
+          <p className="text-lg font-bold text-gray-900 tabular-nums">{formatCurrency(totalCredit)}</p>
+        </div>
+        <div className="bg-white rounded-lg border p-4">
+          <p className="text-xs text-gray-500 font-medium">Total Paid</p>
+          <p className="text-lg font-bold text-green-600 tabular-nums">{formatCurrency(totalDebit)}</p>
+        </div>
+        <div className="bg-white rounded-lg border p-4">
+          <p className="text-xs text-gray-500 font-medium">Amount Payable</p>
+          <p className={`text-lg font-bold tabular-nums ${data.closingBalance > 0 ? "text-red-600" : "text-green-600"}`}>{formatCurrency(data.closingBalance)}</p>
+        </div>
       </div>
 
-      {/* Ledger table */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Transaction History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50 text-left">
-                  <th className="p-3 font-medium">Date</th>
-                  <th className="p-3 font-medium">Description</th>
-                  <th className="p-3 font-medium text-right">Debit (Paid)</th>
-                  <th className="p-3 font-medium text-right">Credit (Bill)</th>
-                  <th className="p-3 font-medium text-right">Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Opening balance row */}
-                <tr className="border-b bg-muted/30">
-                  <td className="p-3 text-muted-foreground">—</td>
-                  <td className="p-3 font-medium">Opening Balance</td>
-                  <td className="p-3 text-right">—</td>
-                  <td className="p-3 text-right">—</td>
-                  <td className="p-3 text-right font-medium">{formatCurrency(data.openingBalance)}</td>
-                </tr>
-                {data.entries.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-6 text-center text-muted-foreground">
-                      No transactions found.
-                    </td>
+      <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="p-4 border-b">
+          <h2 className="text-sm font-semibold text-gray-900">Transaction History</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead><tr><th>Date</th><th>Description</th><th className="text-right">Debit (Paid)</th><th className="text-right">Credit (Bill)</th><th className="text-right">Balance</th></tr></thead>
+            <tbody>
+              <tr className="bg-gray-50">
+                <td className="text-gray-400">&mdash;</td>
+                <td className="font-medium text-gray-900">Opening Balance</td>
+                <td className="text-right">&mdash;</td>
+                <td className="text-right">&mdash;</td>
+                <td className="text-right font-semibold tabular-nums">{formatCurrency(data.openingBalance)}</td>
+              </tr>
+              {data.entries.length === 0 ? (
+                <tr><td colSpan={5} className="p-6 text-center text-gray-500">No transactions found.</td></tr>
+              ) : (
+                data.entries.map((entry, idx) => (
+                  <tr key={`${entry.id}-${idx}`}>
+                    <td className="text-gray-500">{formatDate(entry.date)}</td>
+                    <td>{entry.type === "bill" ? <Link href={`/vendor-bills/${entry.id}`} className="text-blue-600 hover:text-blue-700">{entry.description}</Link> : <span className="text-green-700">{entry.description}</span>}</td>
+                    <td className="text-right font-medium text-green-600 tabular-nums">{entry.debit > 0 ? formatCurrency(entry.debit) : "\u2014"}</td>
+                    <td className="text-right font-medium tabular-nums">{entry.credit > 0 ? formatCurrency(entry.credit) : "\u2014"}</td>
+                    <td className="text-right font-medium tabular-nums">{formatCurrency(entry.balance)}</td>
                   </tr>
-                ) : (
-                  data.entries.map((entry, idx) => (
-                    <tr key={`${entry.id}-${idx}`} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="p-3 text-muted-foreground">{formatDate(entry.date)}</td>
-                      <td className="p-3">
-                        {entry.type === "bill" ? (
-                          <Link href={`/vendor-bills/${entry.id}`} className="text-primary hover:underline">
-                            {entry.description}
-                          </Link>
-                        ) : (
-                          <span className="text-green-700">{entry.description}</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right font-medium text-green-600">
-                        {entry.debit > 0 ? formatCurrency(entry.debit) : "—"}
-                      </td>
-                      <td className="p-3 text-right font-medium">
-                        {entry.credit > 0 ? formatCurrency(entry.credit) : "—"}
-                      </td>
-                      <td className="p-3 text-right font-medium">{formatCurrency(entry.balance)}</td>
-                    </tr>
-                  ))
-                )}
-                {/* Closing balance row */}
-                <tr className="bg-muted/30 font-bold">
-                  <td className="p-3">—</td>
-                  <td className="p-3">Closing Balance</td>
-                  <td className="p-3 text-right text-green-600">{formatCurrency(totalDebit)}</td>
-                  <td className="p-3 text-right">{formatCurrency(totalCredit)}</td>
-                  <td className={`p-3 text-right ${data.closingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
-                    {formatCurrency(data.closingBalance)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                ))
+              )}
+              <tr className="bg-gray-50 font-bold border-t-2 border-gray-900">
+                <td>&mdash;</td>
+                <td className="text-gray-900">Closing Balance</td>
+                <td className="text-right text-green-600 tabular-nums">{formatCurrency(totalDebit)}</td>
+                <td className="text-right tabular-nums">{formatCurrency(totalCredit)}</td>
+                <td className={`text-right tabular-nums ${data.closingBalance > 0 ? "text-red-600" : "text-green-600"}`}>{formatCurrency(data.closingBalance)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

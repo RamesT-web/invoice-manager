@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate entity type
-    if (!["invoice", "vendor_bill"].includes(entityType)) {
+    if (!["invoice", "vendor_bill", "document"].includes(entityType)) {
       return NextResponse.json({ error: "Invalid entity type" }, { status: 400 });
     }
 

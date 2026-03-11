@@ -74,6 +74,7 @@ model Company {
   bankTransactions BankTransaction[]
   auditLogs        AuditLog[]
   settings         Setting[]
+  invoiceRuns      InvoiceRun[]
 
   @@map("companies")
 }
@@ -336,6 +337,8 @@ model Invoice {
   bankUpiId                 String?   @map("bank_upi_id")
   nextFollowUpDate          DateTime? @map("next_follow_up_date") @db.Date
   followUpNotes             String?   @map("follow_up_notes") @db.Text
+  rentalMonth               String?   @map("rental_month")
+  invoiceRunId              String?   @map("invoice_run_id") @db.Uuid
   vendorGstFiled            Boolean   @default(false) @map("vendor_gst_filed")
   gstr2bReflected           Boolean   @default(false) @map("gstr2b_reflected")
   deletedAt                 DateTime? @map("deleted_at")
@@ -347,10 +350,12 @@ model Invoice {
   company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer    Customer       @relation(fields: [customerId], references: [id])
   project     Project?       @relation(fields: [projectId], references: [id])
+  invoiceRun  InvoiceRun?    @relation(fields: [invoiceRunId], references: [id])
   lines       InvoiceLine[]
   payments    Payment[]
   creditNotes CreditNote[]
 
+  @@unique([companyId, customerId, rentalMonth])
   @@index([companyId, status])
   @@index([companyId, customerId])
   @@index([companyId, dueDate])
@@ -381,6 +386,30 @@ model InvoiceLine {
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@map("invoice_lines")
+}
+
+// ─── INVOICE RUNS (RENTAL BULK) ─────────────────────────────
+
+model InvoiceRun {
+  id            String    @id @default(uuid()) @db.Uuid
+  companyId     String    @map("company_id") @db.Uuid
+  month         String    // "2026-03"
+  status        String    @default("running") // running, completed, failed
+  totalClients  Int       @default(0) @map("total_clients")
+  successCount  Int       @default(0) @map("success_count")
+  errorCount    Int       @default(0) @map("error_count")
+  skippedCount  Int       @default(0) @map("skipped_count")
+  errors        String?   @db.Text // JSON array of { clientName, error }
+  startedAt     DateTime  @default(now()) @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+  createdBy     String?   @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+
+  @@index([companyId, month])
+  @@map("invoice_runs")
 }
 
 // ─── PAYMENTS ───────────────────────────────────────────────
@@ -480,9 +509,9 @@ model BankTransaction {
   description       String    @db.Text
   narration         String?   @db.Text
   referenceNumber   String?   @map("reference_number")
-  debit             Decimal   @default(0) @db.Decimal(15, 2)
-  credit            Decimal   @default(0) @db.Decimal(15, 2)
-  balance           Decimal?  @db.Decimal(15, 2)
+  debit             Decimal   @default(0) @db.Decimal(20, 2)
+  credit            Decimal   @default(0) @db.Decimal(20, 2)
+  balance           Decimal?  @db.Decimal(20, 2)
   bankAccountLabel  String?   @map("bank_account_label")
   importHash        String    @map("import_hash") // SHA256 of date+desc+amount for dedup
   status            String    @default("unmatched") // unmatched, matched, ignored
@@ -575,7 +604,7 @@ model Attachment {
   id            String   @id @default(uuid()) @db.Uuid
   companyId     String   @map("company_id") @db.Uuid
   entityType    String   @map("entity_type") // invoice, vendor_bill
-  entityId      String   @map("entity_id") @db.Uuid
+  entityId      String   @map("entity_id")
   fileName      String   @map("file_name")
   fileSize      Int      @map("file_size") // bytes
   mimeType      String   @map("mime_type")

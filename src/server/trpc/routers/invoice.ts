@@ -2,6 +2,8 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { calcLineItem, calcInvoiceTotals, isInterState } from "@/server/services/gst";
 import { generateInvoiceNumber } from "@/server/services/invoice-number";
+import { generateInvoicePdf, type PdfLineItem } from "@/server/services/pdf-invoice";
+import { INDIAN_STATES } from "@/lib/constants";
 
 /** Compute invoice status from balance + due date (skips draft/cancelled) */
 function computeInvoiceStatus(invoice: { status: string; balanceDue: number | { toNumber(): number }; dueDate: Date | string }): string {
@@ -19,7 +21,7 @@ function computeInvoiceStatus(invoice: { status: string; balanceDue: number | { 
 }
 
 const lineItemSchema = z.object({
-  itemId: z.string().uuid().optional().nullable(),
+  itemId: z.string().optional().nullable(),
   description: z.string().min(1),
   hsnSacCode: z.string().optional().nullable(),
   quantity: z.number().min(0),
@@ -35,11 +37,15 @@ export const invoiceRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
+        companyId: z.string(),
         status: z.string().optional(),
-        customerId: z.string().uuid().optional(),
+        customerId: z.string().optional(),
         search: z.string().optional(),
         showDeleted: z.boolean().optional(),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(10).max(100).default(50),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -59,15 +65,27 @@ export const invoiceRouter = router({
           { customer: { name: { contains: input.search, mode: "insensitive" } } },
         ];
       }
+      if (input.dateFrom || input.dateTo) {
+        const dateFilter: Record<string, Date> = {};
+        if (input.dateFrom) dateFilter.gte = new Date(input.dateFrom);
+        if (input.dateTo) dateFilter.lte = new Date(input.dateTo + "T23:59:59");
+        where.invoiceDate = dateFilter;
+      }
 
-      const invoices = await ctx.db.invoice.findMany({
-        where: where as never,
-        include: {
-          customer: { select: { id: true, name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 100,
-      });
+      const skip = (input.page - 1) * input.pageSize;
+
+      const [invoices, totalCount] = await Promise.all([
+        ctx.db.invoice.findMany({
+          where: where as never,
+          include: {
+            customer: { select: { id: true, name: true } },
+          },
+          orderBy: { invoiceDate: "desc" },
+          skip,
+          take: input.pageSize,
+        }),
+        ctx.db.invoice.count({ where: where as never }),
+      ]);
 
       // Auto-compute status for non-deleted invoices
       if (!input.showDeleted) {
@@ -84,14 +102,21 @@ export const invoiceRouter = router({
             );
           }
         }
-        if (updates.length > 0) await Promise.all(updates);
+        if (updates.length > 0) {
+          try { await Promise.all(updates); } catch (e) { console.error("Status sync error:", e); }
+        }
       }
 
-      return invoices;
+      return {
+        invoices,
+        totalCount,
+        totalPages: Math.ceil(totalCount / input.pageSize),
+        page: input.page,
+      };
     }),
 
   get: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.invoice.findUniqueOrThrow({
         where: { id: input.id, deletedAt: null },
@@ -109,8 +134,8 @@ export const invoiceRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
-        customerId: z.string().uuid(),
+        companyId: z.string(),
+        customerId: z.string(),
         invoiceDate: z.string(),
         dueDate: z.string(),
         placeOfSupply: z.string().optional().nullable(),
@@ -239,7 +264,7 @@ export const invoiceRouter = router({
   updateStatus: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string(),
         status: z.string(),
       })
     )
@@ -254,7 +279,7 @@ export const invoiceRouter = router({
   updateCompliance: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string(),
         tdsApplicable: z.boolean().optional(),
         tdsRate: z.number().min(0).max(100).optional().nullable(),
         tdsAmount: z.number().min(0).optional(),
@@ -282,7 +307,7 @@ export const invoiceRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.invoice.update({
         where: { id: input.id },
@@ -291,7 +316,7 @@ export const invoiceRouter = router({
     }),
 
   restore: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const inv = await ctx.db.invoice.update({
         where: { id: input.id },
@@ -306,5 +331,135 @@ export const invoiceRouter = router({
         });
       }
       return inv;
+    }),
+
+  downloadPdf: protectedProcedure
+    .input(z.object({ id: z.string(), companyId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Fetch invoice with customer and lines
+      const invoice = await ctx.db.invoice.findUniqueOrThrow({
+        where: { id: input.id, deletedAt: null },
+        include: {
+          customer: true,
+          lines: { orderBy: { sortOrder: "asc" } },
+        },
+      });
+
+      // Verify invoice belongs to the company
+      if (invoice.companyId !== input.companyId) {
+        throw new Error("Invoice does not belong to this company");
+      }
+
+      // Fetch company details
+      const company = await ctx.db.company.findUniqueOrThrow({
+        where: { id: input.companyId },
+      });
+
+      // Build address strings with natural line breaks matching reference format
+      function buildAddress(
+        line1: string | null, line2: string | null,
+        city: string | null, state: string | null, pin: string | null,
+      ): string {
+        const parts: string[] = [];
+        if (line1) parts.push(line1 + ",");
+        if (line2) parts.push(line2 + ",");
+        const cityLine = [city, state, pin].filter(Boolean).join(" ");
+        if (cityLine) parts.push(cityLine);
+        if (parts.length > 0) parts.push("India");
+        return parts.join("\n");
+      }
+
+      const companyAddress = buildAddress(
+        company.addressLine1, company.addressLine2,
+        company.city, company.stateName, company.pincode,
+      );
+
+      const customerAddress = buildAddress(
+        invoice.customer.billingAddressLine1, invoice.customer.billingAddressLine2,
+        invoice.customer.billingCity, invoice.customer.billingStateName, invoice.customer.billingPincode,
+      );
+
+      // Format date as dd/mm/yyyy
+      function fmtDate(d: Date): string {
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yyyy = d.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      }
+
+      // Format placeOfSupply as "State Name (code)"
+      function fmtPlaceOfSupply(code: string | null | undefined): string | null {
+        if (!code) return null;
+        const state = INDIAN_STATES.find((s) => s.code === code);
+        return state ? `${state.name} (${state.code})` : code;
+      }
+
+      // Determine inter-state
+      const inter = isInterState(company.state, invoice.placeOfSupply);
+
+      // Map line items
+      const pdfLines: PdfLineItem[] = invoice.lines.map((l) => ({
+        description: l.description,
+        hsnSac: l.hsnSacCode || "",
+        qty: Number(l.quantity),
+        unit: l.unit || undefined,
+        rate: Number(l.rate),
+        taxable: Number(l.taxableAmount),
+        gstRate: Number(l.gstRate),
+        gstAmount: Number(l.cgstAmount) + Number(l.sgstAmount) + Number(l.igstAmount),
+        total: Number(l.lineTotal),
+      }));
+
+      // Compute round-off
+      const rawTotal =
+        Number(invoice.taxableAmount) +
+        Number(invoice.cgstAmount) +
+        Number(invoice.sgstAmount) +
+        Number(invoice.igstAmount);
+      const roundOff = Number(invoice.totalAmount) - rawTotal;
+
+      // Build terms string
+      const terms = invoice.terms || null;
+
+      // Generate the PDF
+      const pdfBuffer = await generateInvoicePdf({
+        companyName: company.name,
+        companyLegalName: company.legalName,
+        companyGstin: company.gstin,
+        companyPan: company.pan,
+        companyAddress,
+        companyPhone: company.phone,
+        companyEmail: company.email,
+        invoiceNumber: invoice.invoiceNumber,
+        invoiceDate: fmtDate(invoice.invoiceDate),
+        dueDate: fmtDate(invoice.dueDate),
+        placeOfSupply: fmtPlaceOfSupply(invoice.placeOfSupply),
+        terms,
+        customerName: invoice.customer.name,
+        customerGstin: invoice.customer.gstin,
+        customerAddress,
+        lines: pdfLines,
+        subtotal: Number(invoice.taxableAmount),
+        cgst: Number(invoice.cgstAmount),
+        sgst: Number(invoice.sgstAmount),
+        igst: Number(invoice.igstAmount),
+        totalAmount: Number(invoice.totalAmount),
+        roundOff: Math.abs(roundOff) > 0.001 ? roundOff : undefined,
+        balanceDue: Number(invoice.balanceDue),
+        isInterState: inter,
+        bankName: invoice.bankName || company.bankName,
+        bankAccount: invoice.bankAccountNo || company.bankAccountNo,
+        bankIfsc: invoice.bankIfsc || company.bankIfsc,
+        bankBranch: invoice.bankBranch || company.bankBranch,
+        bankUpi: invoice.bankUpiId || company.bankUpiId,
+        notes: invoice.notes,
+      });
+
+      // Return as base64 for client-side download
+      const filename = `${invoice.invoiceNumber.replace(/\//g, "-")}.pdf`;
+      return {
+        pdf: Buffer.from(pdfBuffer).toString("base64"),
+        filename,
+      };
     }),
 });

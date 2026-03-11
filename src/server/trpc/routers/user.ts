@@ -149,7 +149,7 @@ export const userRouter = router({
   toggleActive: companyAdminProcedure
     .input(
       z.object({
-        userId: z.string().uuid(),
+        userId: z.string(),
         isActive: z.boolean(),
       })
     )
@@ -186,7 +186,7 @@ export const userRouter = router({
   adminResetPassword: companyAdminProcedure
     .input(
       z.object({
-        userId: z.string().uuid(),
+        userId: z.string(),
         newPassword: z.string().min(8),
       })
     )
@@ -212,11 +212,54 @@ export const userRouter = router({
       return { success: true };
     }),
 
+  /** Create a new user and add them to this company (admin only) */
+  adminCreateUser: companyAdminProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        email: z.string().email(),
+        password: z.string().min(8),
+        role: z.enum(["admin", "accounts", "staff"]).default("staff"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Check if email already exists
+      const existing = await ctx.db.user.findUnique({ where: { email: input.email } });
+      if (existing) {
+        // If user exists, check if already in this company
+        const alreadyMember = await ctx.db.companyUser.findUnique({
+          where: { companyId_userId: { companyId: ctx.companyId, userId: existing.id } },
+        });
+        if (alreadyMember) {
+          throw new TRPCError({ code: "CONFLICT", message: "User already belongs to this company" });
+        }
+        // Add existing user to company with given role
+        await ctx.db.companyUser.create({
+          data: { companyId: ctx.companyId, userId: existing.id, role: input.role },
+        });
+        return { id: existing.id, email: existing.email, name: existing.name };
+      }
+
+      // Create new user + add to company
+      const passwordHash = await hash(input.password, 12);
+      const user = await ctx.db.user.create({
+        data: {
+          email: input.email,
+          passwordHash,
+          name: input.name,
+          companyUsers: {
+            create: { companyId: ctx.companyId, role: input.role },
+          },
+        },
+      });
+      return { id: user.id, email: user.email, name: user.name };
+    }),
+
   /** Change a user's role within a company (admin only) */
   changeRole: companyAdminProcedure
     .input(
       z.object({
-        userId: z.string().uuid(),
+        userId: z.string(),
         role: z.enum(["admin", "accounts", "staff"]),
       })
     )

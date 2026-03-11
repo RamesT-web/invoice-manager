@@ -6,7 +6,7 @@ export const settingRouter = router({
   get: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
+        companyId: z.string(),
         key: z.string(),
       })
     )
@@ -26,7 +26,7 @@ export const settingRouter = router({
   set: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
+        companyId: z.string(),
         key: z.string(),
         value: z.any(),
       })

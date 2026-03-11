@@ -9,7 +9,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
+    <div className="min-h-screen bg-[#F4F6F9]">
       {/* Desktop sidebar */}
       <Sidebar />
 
@@ -17,20 +17,22 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       {mobileMenuOpen && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-60 md:hidden">
+          <div className="fixed inset-y-0 left-0 z-50 w-[220px] md:hidden">
             <Sidebar />
           </div>
         </>
       )}
 
       {/* Main content area */}
-      <div className="md:pl-60 flex flex-col min-h-screen">
+      <div className="md:pl-[220px] flex flex-col min-h-screen">
         <Header onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
-        <main className="flex-1 p-4 sm:p-6 pb-20 md:pb-6">
-          {children}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-20 md:pb-8">
+          <div className="max-w-[1400px] mx-auto">
+            {children}
+          </div>
         </main>
       </div>
 

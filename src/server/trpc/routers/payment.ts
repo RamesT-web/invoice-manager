@@ -5,10 +5,15 @@ export const paymentRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
-        invoiceId: z.string().uuid().optional(),
-        customerId: z.string().uuid().optional(),
+        companyId: z.string(),
+        invoiceId: z.string().optional(),
+        customerId: z.string().optional(),
+        vendorId: z.string().optional(),
         search: z.string().optional(),
+        type: z.enum(["received", "made"]).optional(),
+        paymentMode: z.string().optional(),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -18,12 +23,23 @@ export const paymentRouter = router({
       };
       if (input.invoiceId) where.invoiceId = input.invoiceId;
       if (input.customerId) where.customerId = input.customerId;
+      if (input.vendorId) where.vendorId = input.vendorId;
+      if (input.type) where.type = input.type;
+      if (input.paymentMode) where.paymentMode = input.paymentMode;
+      if (input.dateFrom || input.dateTo) {
+        const dateFilter: Record<string, Date> = {};
+        if (input.dateFrom) dateFilter.gte = new Date(input.dateFrom);
+        if (input.dateTo) dateFilter.lte = new Date(input.dateTo + "T23:59:59");
+        where.paymentDate = dateFilter;
+      }
       if (input.search) {
         where.OR = [
           { referenceNumber: { contains: input.search, mode: "insensitive" } },
           { notes: { contains: input.search, mode: "insensitive" } },
           { customer: { name: { contains: input.search, mode: "insensitive" } } },
           { invoice: { invoiceNumber: { contains: input.search, mode: "insensitive" } } },
+          { vendor: { name: { contains: input.search, mode: "insensitive" } } },
+          { vendorBill: { billNumber: { contains: input.search, mode: "insensitive" } } },
         ];
       }
 
@@ -31,7 +47,9 @@ export const paymentRouter = router({
         where: where as never,
         include: {
           invoice: { select: { id: true, invoiceNumber: true, totalAmount: true, balanceDue: true } },
+          vendorBill: { select: { id: true, billNumber: true, totalAmount: true, balanceDue: true } },
           customer: { select: { id: true, name: true } },
+          vendor: { select: { id: true, name: true } },
         },
         orderBy: { paymentDate: "desc" },
         take: 200,
@@ -42,8 +60,8 @@ export const paymentRouter = router({
   record: protectedProcedure
     .input(
       z.object({
-        companyId: z.string().uuid(),
-        invoiceId: z.string().uuid(),
+        companyId: z.string(),
+        invoiceId: z.string(),
         paymentDate: z.string(),
         amount: z.number().positive(),
         paymentMode: z.string(),
@@ -93,7 +111,7 @@ export const paymentRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const payment = await ctx.db.payment.findUniqueOrThrow({
         where: { id: input.id },

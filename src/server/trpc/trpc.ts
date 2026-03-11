@@ -33,11 +33,11 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
 
 /**
  * Procedure that verifies the caller is a member of the requested company.
- * Input MUST include `companyId: z.string().uuid()`.
+ * Input MUST include `companyId: z.string()`.
  * Adds `companyId` and `companyRole` to context.
  */
 export const companyMemberProcedure = protectedProcedure
-  .input(z.object({ companyId: z.string().uuid() }))
+  .input(z.object({ companyId: z.string() }))
   .use(async ({ ctx, input, next }) => {
     const membership = await ctx.db.companyUser.findUnique({
       where: {
@@ -66,7 +66,7 @@ export const companyMemberProcedure = protectedProcedure
  * Procedure that verifies the caller is an admin of the requested company.
  */
 export const companyAdminProcedure = protectedProcedure
-  .input(z.object({ companyId: z.string().uuid() }))
+  .input(z.object({ companyId: z.string() }))
   .use(async ({ ctx, input, next }) => {
     const membership = await ctx.db.companyUser.findUnique({
       where: {
