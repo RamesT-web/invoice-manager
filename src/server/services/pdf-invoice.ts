@@ -129,8 +129,8 @@ const LAYOUT = {
     totalsValue: 8.5,
     totalsBoldLabel: 10,
     totalsBoldValue: 10,
-    bankLabel: 7.5,
-    bankValue: 7.5,
+    bankLabel: 8,
+    bankValue: 8,
     amountWords: 8.5,
     notesTitle: 9,
     notesBody: 8,
@@ -146,7 +146,7 @@ const LAYOUT = {
     billToName: 14,
     billToDetail: 12,
     totalsRow: 15,
-    bankDetail: 12,
+    bankDetail: 13,
     notesBody: 11,
   },
 
@@ -836,8 +836,10 @@ function renderBottomSection(ctx: RenderCtx): void {
     drawText(page, "Bank Details", leftX, ly, fontBold, LAYOUT.fonts.notesTitle);
     ly -= 14;
 
-    // Fixed-width label column so colons and values align on the same vertical line
-    const labelColW = 70;
+    // Compute label column width dynamically from the longest label for perfect alignment
+    const labelColW = Math.max(
+      ...bankFields.map(f => fontBold.widthOfTextAtSize(f.l, LAYOUT.fonts.bankLabel))
+    ) + 6; // 6pt padding after longest label
     const colonX = leftX + labelColW;
     const colonStr = ":  ";
     const valueX = colonX + fontRegular.widthOfTextAtSize(colonStr, LAYOUT.fonts.bankValue);
