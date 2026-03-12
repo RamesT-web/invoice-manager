@@ -567,24 +567,22 @@ export default function InvoiceDetailPage() {
         </div>
       )}
 
-      {/* Delete (only for drafts) */}
-      {invoice.status === "draft" && (
-        <div className="flex justify-end print:hidden pb-6">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 text-red-500 hover:text-red-600 hover:bg-red-50 hover:border-red-200"
-            onClick={() => {
-              if (confirm("Delete this draft invoice?")) {
-                deleteMutation.mutate({ id: invoiceId });
-              }
-            }}
-            disabled={deleteMutation.isPending}
-          >
-            Delete Draft
-          </Button>
-        </div>
-      )}
+      {/* Delete invoice */}
+      <div className="flex justify-end print:hidden pb-6">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 text-red-500 hover:text-red-600 hover:bg-red-50 hover:border-red-200"
+          onClick={() => {
+            if (confirm("Delete this invoice? It will be moved to trash.")) {
+              deleteMutation.mutate({ id: invoiceId });
+            }
+          }}
+          disabled={deleteMutation.isPending}
+        >
+          Delete Invoice
+        </Button>
+      </div>
 
       {/* Record Payment Dialog */}
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
