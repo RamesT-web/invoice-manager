@@ -26,7 +26,7 @@ const STATUS_FILTERS = [
 
 type SortField = "invoiceNumber" | "customerName" | "invoiceDate";
 
-export default function InvoicesPage() {
+export default function BillOfSupplyPage() {
   const { activeCompanyId } = useCompanyStore();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -42,7 +42,7 @@ export default function InvoicesPage() {
   const { data, isLoading } = trpc.invoice.list.useQuery(
     {
       companyId: activeCompanyId!,
-      invoiceType: "invoice",
+      invoiceType: "bill_of_supply",
       search: debouncedSearch || undefined,
       status: statusFilter || undefined,
       showDeleted,
@@ -95,7 +95,7 @@ export default function InvoicesPage() {
     <div className="space-y-4">
       {/* Page header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Invoices</h1>
+        <h1 className="text-xl font-semibold text-gray-900">Bill of Supply</h1>
         <div className="flex items-center gap-2">
           <Button
             variant={showDeleted ? "default" : "outline"}
@@ -107,10 +107,10 @@ export default function InvoicesPage() {
             {showDeleted ? "Viewing Trash" : "Trash"}
           </Button>
           {!showDeleted && (
-            <Link href="/invoices/new">
+            <Link href="/invoices/new?type=bos">
               <Button size="sm" className="h-9 bg-blue-600 hover:bg-blue-700">
                 <Plus className="h-4 w-4 mr-1.5" />
-                New Invoice
+                New Bill of Supply
               </Button>
             </Link>
           )}
@@ -123,7 +123,7 @@ export default function InvoicesPage() {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search invoices..."
+              placeholder="Search bills..."
               className="pl-9 h-9 bg-gray-50 border-gray-200"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -185,23 +185,23 @@ export default function InvoicesPage() {
             </div>
             <h2 className="text-base font-semibold text-gray-900 mb-1">
               {showDeleted
-                ? "No deleted invoices"
+                ? "No deleted bills"
                 : search || statusFilter
-                  ? "No matching invoices"
-                  : "No invoices yet"}
+                  ? "No matching bills"
+                  : "No bills of supply yet"}
             </h2>
             <p className="text-sm text-gray-500 mb-4 max-w-sm">
               {showDeleted
-                ? "Deleted invoices will appear here."
+                ? "Deleted bills will appear here."
                 : search || statusFilter
                   ? "Try adjusting your search or filters."
-                  : "Create your first invoice to get started."}
+                  : "Create your first bill of supply to get started."}
             </p>
             {!search && !statusFilter && !showDeleted && (
-              <Link href="/invoices/new">
+              <Link href="/invoices/new?type=bos">
                 <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
                   <Plus className="h-4 w-4 mr-1.5" />
-                  Create Invoice
+                  Create Bill of Supply
                 </Button>
               </Link>
             )}
@@ -209,7 +209,7 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {/* Invoice list */}
+      {/* Bill list */}
       {!isLoading && invoices && invoices.length > 0 && (
         <>
           {/* Desktop table */}
@@ -219,7 +219,7 @@ export default function InvoicesPage() {
                 <tr>
                   <th className="w-[140px]">
                     <button onClick={() => toggleSort("invoiceNumber")} className="flex items-center hover:text-blue-600 transition-colors">
-                      Invoice # <SortIcon field="invoiceNumber" />
+                      Bill # <SortIcon field="invoiceNumber" />
                     </button>
                   </th>
                   <th>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { calcLineItem, calcInvoiceTotals, isInterState } from "@/server/services/gst";
-import { generateInvoiceNumber } from "@/server/services/invoice-number";
+import { generateInvoiceNumber, generateBosNumber } from "@/server/services/invoice-number";
 import { generateInvoicePdf, type PdfLineItem } from "@/server/services/pdf-invoice";
 import { INDIAN_STATES } from "@/lib/constants";
 
@@ -38,12 +38,15 @@ export const invoiceRouter = router({
     .input(
       z.object({
         companyId: z.string(),
+        invoiceType: z.enum(["invoice", "bill_of_supply"]).optional(),
         status: z.string().optional(),
         customerId: z.string().optional(),
         search: z.string().optional(),
         showDeleted: z.boolean().optional(),
         dateFrom: z.string().optional(),
         dateTo: z.string().optional(),
+        sortBy: z.enum(["invoiceNumber", "customerName", "invoiceDate"]).default("invoiceNumber"),
+        sortOrder: z.enum(["asc", "desc"]).default("desc"),
         page: z.number().min(1).default(1),
         pageSize: z.number().min(10).max(100).default(50),
       })
@@ -52,6 +55,9 @@ export const invoiceRouter = router({
       const where: Record<string, unknown> = {
         companyId: input.companyId,
       };
+      if (input.invoiceType) {
+        where.invoiceType = input.invoiceType;
+      }
       if (input.showDeleted) {
         where.deletedAt = { not: null };
       } else {
@@ -74,13 +80,23 @@ export const invoiceRouter = router({
 
       const skip = (input.page - 1) * input.pageSize;
 
+      // Build orderBy based on sortBy param
+      let orderBy: Record<string, unknown>;
+      if (input.sortBy === "customerName") {
+        orderBy = { customer: { name: input.sortOrder } };
+      } else if (input.sortBy === "invoiceDate") {
+        orderBy = { invoiceDate: input.sortOrder };
+      } else {
+        orderBy = { invoiceNumber: input.sortOrder };
+      }
+
       const [invoices, totalCount] = await Promise.all([
         ctx.db.invoice.findMany({
           where: where as never,
           include: {
             customer: { select: { id: true, name: true } },
           },
-          orderBy: { invoiceDate: "desc" },
+          orderBy: orderBy as never,
           skip,
           take: input.pageSize,
         }),
@@ -136,6 +152,7 @@ export const invoiceRouter = router({
       z.object({
         companyId: z.string(),
         customerId: z.string(),
+        invoiceType: z.enum(["invoice", "bill_of_supply"]).default("invoice"),
         invoiceDate: z.string(),
         dueDate: z.string(),
         placeOfSupply: z.string().optional().nullable(),
@@ -201,14 +218,18 @@ export const invoiceRouter = router({
         }))
       );
 
-      // Generate invoice number
-      const invoiceNumber = await generateInvoiceNumber(ctx.db, companyId);
+      // Generate invoice number (or BOS number)
+      const isBos = input.invoiceType === "bill_of_supply";
+      const invoiceNumber = isBos
+        ? await generateBosNumber(ctx.db, companyId)
+        : await generateInvoiceNumber(ctx.db, companyId);
 
       // Create invoice + lines in a transaction
       const invoice = await ctx.db.invoice.create({
         data: {
           companyId,
           invoiceNumber,
+          invoiceType: input.invoiceType,
           customerId: invoiceData.customerId,
           invoiceDate: new Date(invoiceData.invoiceDate),
           dueDate: new Date(invoiceData.dueDate),

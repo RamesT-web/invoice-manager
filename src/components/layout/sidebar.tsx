@@ -40,6 +40,7 @@ const navItems: NavItem[] = [
     icon: FileText,
     children: [
       { label: "Invoices", href: "/invoices" },
+      { label: "Bill of Supply", href: "/bill-of-supply" },
       { label: "Quotes", href: "/quotes" },
       { label: "Credit Notes", href: "/credit-notes" },
       { label: "Rental Invoicing", href: "/rental-invoicing" },

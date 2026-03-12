@@ -26,6 +26,29 @@ export async function generateInvoiceNumber(
   return `${company.invoicePrefix}${fy}/${paddedSerial}`;
 }
 
+/**
+ * Generate the next Bill of Supply number and atomically increment the counter.
+ * Format: {bosPrefix}{serial} e.g. BOS/001
+ */
+export async function generateBosNumber(
+  db: PrismaClient,
+  companyId: string
+): Promise<string> {
+  const company = await db.company.update({
+    where: { id: companyId },
+    data: { bosNextNumber: { increment: 1 } },
+    select: {
+      bosPrefix: true,
+      bosNextNumber: true,
+    },
+  });
+
+  const serial = company.bosNextNumber - 1;
+  const paddedSerial = String(serial).padStart(6, "0");
+
+  return `${company.bosPrefix}${paddedSerial}`;
+}
+
 /** Get financial year string like "2024-25" based on start month */
 function getFinancialYear(startMonth: number): string {
   const now = new Date();

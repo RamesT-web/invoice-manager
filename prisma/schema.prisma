@@ -54,6 +54,8 @@ model Company {
   quoteNextNumber         Int      @default(1) @map("quote_next_number")
   creditNotePrefix        String   @default("CN/") @map("credit_note_prefix")
   creditNoteNextNumber    Int      @default(1) @map("credit_note_next_number")
+  bosPrefix               String   @default("BOS/") @map("bos_prefix")
+  bosNextNumber           Int      @default(1) @map("bos_next_number")
   defaultTerms            String?  @map("default_terms") @db.Text
   defaultPaymentTermsDays Int      @default(30) @map("default_payment_terms_days")
   financialYearStart      String   @default("04") @map("financial_year_start")
@@ -298,6 +300,7 @@ model Invoice {
   id                        String    @id @default(uuid()) @db.Uuid
   companyId                 String    @map("company_id") @db.Uuid
   invoiceNumber             String    @map("invoice_number")
+  invoiceType               String    @default("invoice") @map("invoice_type")
   customerId                String    @map("customer_id") @db.Uuid
   projectId                 String?   @map("project_id") @db.Uuid
   costCenter                String?   @map("cost_center")
@@ -360,6 +363,7 @@ model Invoice {
   @@index([companyId, customerId])
   @@index([companyId, dueDate])
   @@index([companyId, invoiceNumber])
+  @@index([companyId, invoiceType])
   @@map("invoices")
 }
 

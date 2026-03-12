@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useCompanyStore } from "@/lib/hooks/use-company";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,8 @@ function newLine(): LineItem {
 
 export default function NewInvoicePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isBos = searchParams.get("type") === "bos";
   const { activeCompanyId } = useCompanyStore();
   const today = format(new Date(), "yyyy-MM-dd");
 
@@ -114,6 +116,7 @@ export default function NewInvoicePage() {
     createMutation.mutate({
       companyId: activeCompanyId,
       customerId,
+      invoiceType: isBos ? "bill_of_supply" as const : "invoice" as const,
       invoiceDate,
       dueDate,
       placeOfSupply: placeOfSupply || null,
@@ -148,12 +151,12 @@ export default function NewInvoicePage() {
     <div className="space-y-5 max-w-5xl">
       {/* Page header */}
       <div className="flex items-center gap-3">
-        <Link href="/invoices">
+        <Link href={isBos ? "/bill-of-supply" : "/invoices"}>
           <Button variant="ghost" size="icon" className="h-9 w-9">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <h1 className="text-xl font-semibold text-gray-900">New Invoice</h1>
+        <h1 className="text-xl font-semibold text-gray-900">{isBos ? "New Bill of Supply" : "New Invoice"}</h1>
       </div>
 
       {/* Header fields */}
