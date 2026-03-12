@@ -163,6 +163,21 @@ function GoogleSheetsSyncCard({ companyId }: { companyId: string }) {
   const [apiKey, setApiKey] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  /** Save config first, then trigger sync — ensures DB is up-to-date before sync reads it */
+  const handleSyncNow = async () => {
+    if (!spreadsheetUrl) return;
+    setIsSyncing(true);
+    try {
+      await saveConfigMutation.mutateAsync({ companyId, spreadsheetUrl, apiKey, enabled: true });
+      await syncNowMutation.mutateAsync({ companyId });
+    } catch {
+      // errors are shown via syncNowMutation.data or saveConfigMutation.error
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (config && !initialized) {
@@ -204,11 +219,17 @@ function GoogleSheetsSyncCard({ companyId }: { companyId: string }) {
           {saveConfigMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
           {syncSaved ? "Saved!" : "Save Config"}
         </Button>
-        <Button size="sm" className="h-9 bg-blue-600 hover:bg-blue-700" onClick={() => syncNowMutation.mutate({ companyId })} disabled={syncNowMutation.isPending || !spreadsheetUrl}>
-          {syncNowMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+        <Button size="sm" className="h-9 bg-blue-600 hover:bg-blue-700" onClick={handleSyncNow} disabled={isSyncing || !spreadsheetUrl}>
+          {isSyncing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
           Sync Now
         </Button>
       </div>
+
+      {saveConfigMutation.error && !syncNowMutation.data && (
+        <div className="rounded-lg border p-3 text-sm bg-red-50 border-red-200">
+          <div className="flex items-center gap-1 text-red-800"><XCircle className="h-4 w-4" />{saveConfigMutation.error.message}</div>
+        </div>
+      )}
 
       {syncNowMutation.data && (
         <div className={`rounded-lg border p-3 text-sm ${syncNowMutation.data.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>

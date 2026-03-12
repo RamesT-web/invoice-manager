@@ -75,7 +75,7 @@ export const googleSheetsRouter = router({
   syncNow: protectedProcedure
     .input(z.object({ companyId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const entry = await runSync(input.companyId, ctx.db);
+      const entry = await runSync(input.companyId, ctx.db, { force: true });
       return entry;
     }),
 });

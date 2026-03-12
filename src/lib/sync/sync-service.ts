@@ -27,7 +27,8 @@ export interface SyncLogEntry {
  */
 export async function runSync(
   companyId: string,
-  db: PrismaClient
+  db: PrismaClient,
+  options?: { force?: boolean }
 ): Promise<SyncLogEntry> {
   const startTime = Date.now();
 
@@ -43,7 +44,7 @@ export async function runSync(
 
     const config = configSetting.value as unknown as SyncConfig;
 
-    if (!config.enabled) {
+    if (!config.enabled && !options?.force) {
       throw new Error("Sync is disabled for this company.");
     }
 
