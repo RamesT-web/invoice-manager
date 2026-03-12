@@ -179,11 +179,20 @@ function GoogleSheetsSyncCard({ companyId }: { companyId: string }) {
     }
   };
 
+  // Reset form when company changes
   useEffect(() => {
-    if (config && !initialized) {
-      setSpreadsheetUrl(config.spreadsheetId || "");
-      setApiKey(config.apiKey || "");
-      setEnabled(config.enabled || false);
+    setInitialized(false);
+    setSpreadsheetUrl("");
+    setApiKey("");
+    setEnabled(false);
+  }, [companyId]);
+
+  // Load config from DB into form fields
+  useEffect(() => {
+    if (config !== undefined && !initialized) {
+      setSpreadsheetUrl(config?.spreadsheetId || "");
+      setApiKey(config?.apiKey || "");
+      setEnabled(config?.enabled || false);
       setInitialized(true);
     }
   }, [config, initialized]);

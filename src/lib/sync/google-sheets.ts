@@ -74,7 +74,13 @@ export function extractSpreadsheetId(urlOrId: string): string {
 
   // Check if it's already a raw ID (no slashes)
   if (!trimmed.includes("/")) {
-    return trimmed;
+    // Validate: spreadsheet IDs are alphanumeric + hyphens + underscores, at least 20 chars
+    if (/^[a-zA-Z0-9_-]{20,}$/.test(trimmed)) {
+      return trimmed;
+    }
+    throw new Error(
+      "Invalid spreadsheet ID. Paste the full Google Sheets URL (e.g. https://docs.google.com/spreadsheets/d/...)."
+    );
   }
 
   // Extract from URL
