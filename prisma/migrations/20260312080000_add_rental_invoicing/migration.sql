@@ -24,8 +24,8 @@ ALTER TABLE "invoices" ADD COLUMN "invoice_run_id" UUID;
 -- CreateIndex
 CREATE INDEX "invoice_runs_company_id_month_idx" ON "invoice_runs"("company_id", "month");
 
--- CreateIndex (unique constraint for rental dedup)
-CREATE UNIQUE INDEX "invoices_company_id_customer_id_rental_month_key" ON "invoices"("company_id", "customer_id", "rental_month");
+-- CreateIndex (unique constraint for rental dedup — partial, only when rental_month is set)
+CREATE UNIQUE INDEX "invoices_company_id_customer_id_rental_month_key" ON "invoices"("company_id", "customer_id", "rental_month") WHERE "rental_month" IS NOT NULL;
 
 -- AddForeignKey
 ALTER TABLE "invoice_runs" ADD CONSTRAINT "invoice_runs_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
