@@ -713,9 +713,10 @@ function renderTotals(ctx: RenderCtx): void {
   }
 
   // Build bordered rows (Total, Balance Due)
+  // Use "Rs." instead of ₹ (U+20B9) — Helvetica fallback on Linux cannot encode ₹
   const boldRows: { label: string; value: string }[] = [
-    { label: "Total", value: `\u20B9${fmt(data.totalAmount)}` },
-    { label: "Balance Due", value: `\u20B9${fmt(data.balanceDue ?? data.totalAmount)}` },
+    { label: "Total", value: `Rs. ${fmt(data.totalAmount)}` },
+    { label: "Balance Due", value: `Rs. ${fmt(data.balanceDue ?? data.totalAmount)}` },
   ];
 
   const totalHeight = plainRows.length * lh + boldRows.length * tc.boldRowHeight + LAYOUT.spacing.tableToTotals + 5;
@@ -835,10 +836,22 @@ function renderBottomSection(ctx: RenderCtx): void {
     drawText(page, "Bank Details", leftX, ly, fontBold, LAYOUT.fonts.notesTitle);
     ly -= 14;
 
-    const labelColW = 65;
+    // Fixed-width label column so colons and values align on the same vertical line
+    const labelColW = 70;
+    const colonX = leftX + labelColW;
+    const colonStr = ":  ";
+    const valueX = colonX + fontRegular.widthOfTextAtSize(colonStr, LAYOUT.fonts.bankValue);
+    const valueMaxW = leftMaxW - (valueX - leftX) - 4;
+
     for (const f of bankFields) {
       drawText(page, f.l, leftX, ly, fontBold, LAYOUT.fonts.bankLabel);
-      drawText(page, `:  ${f.v}`, leftX + labelColW, ly, fontRegular, LAYOUT.fonts.bankValue);
+      drawText(page, colonStr, colonX, ly, fontRegular, LAYOUT.fonts.bankValue);
+      // Wrap long values (e.g. long account numbers) without breaking alignment
+      const valLines = wrapText(f.v || "", fontRegular, LAYOUT.fonts.bankValue, valueMaxW);
+      for (let vi = 0; vi < valLines.length; vi++) {
+        drawText(page, valLines[vi]!, valueX, ly, fontRegular, LAYOUT.fonts.bankValue);
+        if (vi < valLines.length - 1) ly -= LAYOUT.lineHeights.bankDetail;
+      }
       ly -= LAYOUT.lineHeights.bankDetail;
     }
   }
