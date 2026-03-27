@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useCompanyStore } from "@/lib/hooks/use-company";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { GST_RATES } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { calcLineItem, calcInvoiceTotals, isInterState as checkInterState } from "@/server/services/gst";
-import { ArrowLeft, Plus, Trash2, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Loader2, Save, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { addDays, format } from "date-fns";
 
@@ -63,10 +63,24 @@ export default function NewInvoicePage() {
   );
 
   const [customerId, setCustomerId] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(today);
   const [dueDate, setDueDate] = useState(format(addDays(new Date(), 30), "yyyy-MM-dd"));
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<LineItem[]>([newLine()]);
+
+  // Debounced duplicate invoice number check
+  const [debouncedNumber, setDebouncedNumber] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedNumber(invoiceNumber.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [invoiceNumber]);
+
+  const { data: duplicateCheck } = trpc.invoice.checkDuplicateNumber.useQuery(
+    { companyId: activeCompanyId!, invoiceNumber: debouncedNumber },
+    { enabled: !!activeCompanyId && debouncedNumber.length > 0 }
+  );
+  const isDuplicate = duplicateCheck?.isDuplicate ?? false;
 
   const createMutation = trpc.invoice.create.useMutation({
     onSuccess: (inv) => router.push(`/invoices/${inv.id}`),
@@ -112,11 +126,13 @@ export default function NewInvoicePage() {
 
   function handleSubmit(status: "draft" | "sent") {
     if (!activeCompanyId || !customerId || lines.every((l) => !l.description)) return;
+    if (isDuplicate) return;
 
     createMutation.mutate({
       companyId: activeCompanyId,
       customerId,
       invoiceType: isBos ? "bill_of_supply" as const : "invoice" as const,
+      invoiceNumber: invoiceNumber.trim() || undefined,
       invoiceDate,
       dueDate,
       placeOfSupply: placeOfSupply || null,
@@ -161,8 +177,25 @@ export default function NewInvoicePage() {
 
       {/* Header fields */}
       <div className="bg-white rounded-lg border p-6 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="space-y-1.5 sm:col-span-1">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700">Invoice Number</Label>
+            <Input
+              placeholder="Auto-generated"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+              className={`h-9 bg-gray-50 font-mono ${isDuplicate ? "border-red-500 ring-1 ring-red-500 focus:ring-red-500" : "border-gray-200"}`}
+            />
+            {isDuplicate ? (
+              <p className="text-[11px] text-red-600 font-medium flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Invoice number already exists!
+              </p>
+            ) : (
+              <p className="text-[11px] text-gray-400">Leave blank to auto-generate</p>
+            )}
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-sm font-medium text-gray-700">Customer *</Label>
             <select
               className="flex h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
@@ -188,7 +221,7 @@ export default function NewInvoicePage() {
         {selectedCustomer && (
           <div className="text-xs text-gray-500">
             {selectedCustomer.gstin && <span className="font-mono">GSTIN: {selectedCustomer.gstin} &middot; </span>}
-            {selectedCustomer.billingStateName ?? ""}
+            {selectedCustomer.billingStateName || selectedCustomer.billingState || ""}
             {interState && <span className="ml-2 text-orange-600 font-medium">(Inter-state — IGST)</span>}
             {!interState && placeOfSupply && <span className="ml-2 text-green-600 font-medium">(Intra-state — CGST+SGST)</span>}
           </div>
@@ -293,11 +326,11 @@ export default function NewInvoicePage() {
       {/* Actions */}
       <div className="flex justify-end gap-3 pb-6">
         <Link href="/invoices"><Button variant="outline" className="h-9">Cancel</Button></Link>
-        <Button variant="outline" className="h-9" onClick={() => handleSubmit("draft")} disabled={createMutation.isPending || !customerId}>
+        <Button variant="outline" className="h-9" onClick={() => handleSubmit("draft")} disabled={createMutation.isPending || !customerId || isDuplicate}>
           {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
           Save Draft
         </Button>
-        <Button className="h-9 bg-blue-600 hover:bg-blue-700" onClick={() => handleSubmit("sent")} disabled={createMutation.isPending || !customerId}>
+        <Button className="h-9 bg-blue-600 hover:bg-blue-700" onClick={() => handleSubmit("sent")} disabled={createMutation.isPending || !customerId || isDuplicate}>
           {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
           Save & Mark Sent
         </Button>

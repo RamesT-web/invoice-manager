@@ -131,6 +131,31 @@ export const invoiceRouter = router({
       };
     }),
 
+  checkDuplicateNumber: protectedProcedure
+    .input(
+      z.object({
+        companyId: z.string(),
+        invoiceNumber: z.string(),
+        excludeId: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const trimmed = input.invoiceNumber.trim();
+      if (!trimmed) return { isDuplicate: false, existingInvoice: null };
+      const existing = await ctx.db.invoice.findFirst({
+        where: {
+          companyId: input.companyId,
+          invoiceNumber: trimmed,
+          ...(input.excludeId ? { id: { not: input.excludeId } } : {}),
+        },
+        select: { id: true, invoiceNumber: true, status: true },
+      });
+      return {
+        isDuplicate: !!existing,
+        existingInvoice: existing,
+      };
+    }),
+
   get: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -153,6 +178,7 @@ export const invoiceRouter = router({
         companyId: z.string(),
         customerId: z.string(),
         invoiceType: z.enum(["invoice", "bill_of_supply"]).default("invoice"),
+        invoiceNumber: z.string().optional(),
         invoiceDate: z.string(),
         dueDate: z.string(),
         placeOfSupply: z.string().optional().nullable(),
@@ -218,11 +244,23 @@ export const invoiceRouter = router({
         }))
       );
 
-      // Generate invoice number (or BOS number)
+      // Use provided invoice number or auto-generate
       const isBos = input.invoiceType === "bill_of_supply";
-      const invoiceNumber = isBos
-        ? await generateBosNumber(ctx.db, companyId)
-        : await generateInvoiceNumber(ctx.db, companyId);
+      let invoiceNumber: string;
+      if (input.invoiceNumber && input.invoiceNumber.trim()) {
+        // Check uniqueness within the company
+        const existing = await ctx.db.invoice.findFirst({
+          where: { companyId, invoiceNumber: input.invoiceNumber.trim() },
+        });
+        if (existing) {
+          throw new Error(`Invoice number "${input.invoiceNumber.trim()}" already exists`);
+        }
+        invoiceNumber = input.invoiceNumber.trim();
+      } else {
+        invoiceNumber = isBos
+          ? await generateBosNumber(ctx.db, companyId)
+          : await generateInvoiceNumber(ctx.db, companyId);
+      }
 
       // Create invoice + lines in a transaction
       const invoice = await ctx.db.invoice.create({
@@ -327,6 +365,33 @@ export const invoiceRouter = router({
       });
     }),
 
+  updateInvoiceNumber: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        companyId: z.string(),
+        invoiceNumber: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const trimmed = input.invoiceNumber.trim();
+      // Check uniqueness within the company (excluding the current invoice)
+      const existing = await ctx.db.invoice.findFirst({
+        where: {
+          companyId: input.companyId,
+          invoiceNumber: trimmed,
+          id: { not: input.id },
+        },
+      });
+      if (existing) {
+        throw new Error(`Invoice number "${trimmed}" already exists`);
+      }
+      return ctx.db.invoice.update({
+        where: { id: input.id },
+        data: { invoiceNumber: trimmed, updatedBy: ctx.userId },
+      });
+    }),
+
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -397,7 +462,7 @@ export const invoiceRouter = router({
 
       const customerAddress = buildAddress(
         invoice.customer.billingAddressLine1, invoice.customer.billingAddressLine2,
-        invoice.customer.billingCity, invoice.customer.billingStateName, invoice.customer.billingPincode,
+        invoice.customer.billingCity, invoice.customer.billingStateName || invoice.customer.billingState, invoice.customer.billingPincode,
       );
 
       // Format date as dd/mm/yyyy

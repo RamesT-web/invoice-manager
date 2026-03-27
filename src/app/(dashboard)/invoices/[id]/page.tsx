@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompanyStore } from "@/lib/hooks/use-company";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { INVOICE_STATUSES, INDIAN_STATES, PAYMENT_MODES, TDS_RATES, TDS_CERTIFICATE_STATUSES } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { ArrowLeft, Loader2, Printer, Send, CheckCircle, XCircle, IndianRupee, ChevronDown, ChevronUp, Save, Download } from "lucide-react";
+import { ArrowLeft, Loader2, Printer, Send, CheckCircle, XCircle, IndianRupee, ChevronDown, ChevronUp, Save, Download, Pencil, Check, X, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { AttachmentPanel } from "@/components/attachments/attachment-panel";
@@ -37,6 +37,28 @@ export default function InvoiceDetailPage() {
   });
   const deleteMutation = trpc.invoice.delete.useMutation({
     onSuccess: () => router.push("/invoices"),
+  });
+
+  // Invoice number edit state
+  const [editingNumber, setEditingNumber] = useState(false);
+  const [editNumber, setEditNumber] = useState("");
+  const [debouncedEditNumber, setDebouncedEditNumber] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedEditNumber(editNumber.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [editNumber]);
+
+  const { data: editDuplicateCheck } = trpc.invoice.checkDuplicateNumber.useQuery(
+    { companyId: activeCompanyId!, invoiceNumber: debouncedEditNumber, excludeId: invoiceId },
+    { enabled: !!activeCompanyId && editingNumber && debouncedEditNumber.length > 0 }
+  );
+  const isEditDuplicate = editDuplicateCheck?.isDuplicate ?? false;
+
+  const updateInvoiceNumber = trpc.invoice.updateInvoiceNumber.useMutation({
+    onSuccess: () => {
+      utils.invoice.get.invalidate({ id: invoiceId });
+      setEditingNumber(false);
+    },
   });
 
   // Payment dialog state
@@ -195,7 +217,55 @@ export default function InvoiceDetailPage() {
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-gray-900">{invoice.invoiceNumber}</h1>
+            {editingNumber ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={editNumber}
+                    onChange={(e) => setEditNumber(e.target.value)}
+                    className={`h-8 w-56 font-mono text-sm ${isEditDuplicate ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && editNumber.trim() && activeCompanyId && !isEditDuplicate) {
+                        updateInvoiceNumber.mutate({ id: invoiceId, companyId: activeCompanyId, invoiceNumber: editNumber });
+                      }
+                      if (e.key === "Escape") setEditingNumber(false);
+                    }}
+                  />
+                  <Button
+                    variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                    onClick={() => {
+                      if (editNumber.trim() && activeCompanyId && !isEditDuplicate) {
+                        updateInvoiceNumber.mutate({ id: invoiceId, companyId: activeCompanyId, invoiceNumber: editNumber });
+                      }
+                    }}
+                    disabled={updateInvoiceNumber.isPending || !editNumber.trim() || isEditDuplicate}
+                  >
+                    {updateInvoiceNumber.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-gray-600" onClick={() => setEditingNumber(false)}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                {isEditDuplicate && (
+                  <p className="text-[11px] text-red-600 font-medium flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Invoice number already exists!
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                <h1 className="text-xl font-semibold text-gray-900">{invoice.invoiceNumber}</h1>
+                <Button
+                  variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-gray-600"
+                  onClick={() => { setEditNumber(invoice.invoiceNumber); setEditingNumber(true); }}
+                  title="Edit invoice number"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
             {getStatusBadge(invoice.status)}
           </div>
           <p className="text-sm text-gray-500">{invoice.customer.name}</p>
@@ -293,7 +363,7 @@ export default function InvoiceDetailPage() {
                 invoice.customer.billingAddressLine1,
                 invoice.customer.billingAddressLine2,
                 invoice.customer.billingCity,
-                invoice.customer.billingStateName,
+                invoice.customer.billingStateName || invoice.customer.billingState,
                 invoice.customer.billingPincode,
               ]
                 .filter(Boolean)
